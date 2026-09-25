@@ -1,0 +1,6 @@
+build/
+runs/
+pdks
+*.vcd
+*.log
+__pycache__/

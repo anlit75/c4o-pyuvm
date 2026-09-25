@@ -1,0 +1,55 @@
+{
+    "name": "ChipForAll",
+    "image": "ghcr.io/anlit75/c4o-core:2.8",
+    // Do not change this to a non-root user without testing a Codespace.
+    // "ubuntu" (the user ubuntu:24.04 ships at uid 1000) looked like the right
+    // answer -- it keeps files created here owned by the host user on Linux --
+    // and it broke Codespaces outright: "14 UNAVAILABLE: No connection
+    // established". The remote server could not start as that user. The image
+    // carries no sudo, and workspaceMount below puts the repo at /workspace,
+    // which Codespaces creates root-owned. Root sidesteps both.
+    // The cost is real and accepted: on a Linux host, files this container
+    // writes into build/ and .git are owned by root.
+    "remoteUser": "root",
+    // `make gds` launches the LibreLane container as a sidecar, so this
+    // container needs a Docker daemon of its own. Without one, the headline
+    // command of a "zero install" starter kit was the one command you had to
+    // leave the container to run -- in Codespaces, that meant you could not
+    // run it at all.
+    //
+    // docker-IN-docker, not docker-outside-of-docker, and the difference
+    // matters here. `make gds` bind-mounts $(PWD), which is /workspace inside
+    // this container. An outside daemon resolves that path on the host, where
+    // /workspace does not exist, so Docker would helpfully create an empty
+    // directory and LibreLane would run against nothing. An inside daemon
+    // resolves it against this filesystem, where it is the repo. No path
+    // translation, no silent empty mount.
+    //
+    // The feature sets privileged and its own entrypoint; nothing else here
+    // needs to change for it.
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash"
+            },
+            "extensions": [
+                "mshr-h.veriloghdl",
+                "wavetrace.wavetrace",
+                // clarkyu.vscode-yosys-viewer used to be here, to open the
+                // Yosys netlist `make synth` writes. It has been pulled from
+                // the marketplace, and a listed extension that no longer
+                // exists does not fail the build -- it just never installs.
+                // Nothing here can catch that either: extensions are the VS
+                // Code server's job, and `devcontainer up`, which the CI job
+                // runs, does not touch them.
+                "editorconfig.editorconfig",
+                "usernamehw.errorlens" 
+            ]
+        }
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "workspaceFolder": "/workspace"
+}

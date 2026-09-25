@@ -1,0 +1,295 @@
+name: RTL to GDSII
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+    tags: [ 'v*' ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  # No paths-ignore here, deliberately. A required status check that never runs
+  # is not "skipped", it is "Expected -- waiting for status to be reported", and
+  # the pull request can never be merged. A docs-only change costs one full run;
+  # a permanently unmergeable pull request costs more. The push trigger above
+  # keeps its filter, so merging docs to main still skips the flow.
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  # The Dev Container is the "zero install" promise, and nothing else here
+  # exercises it -- the job below runs on the host, against the plain image.
+  # So a devcontainer.json change could only be caught by opening a Codespace
+  # by hand, which is how `remoteUser` broke once already.
+  #
+  # Builds it for real and checks the two things `make gds` needs from it: a
+  # Docker daemon that answers (the guard's exact condition), and the
+  # in-container delegation path the Makefile takes when it finds the
+  # entrypoint script locally. It does not run `make gds` itself -- that wants
+  # a 3GB PDK and twenty minutes -- and it cannot speak for Codespaces, whose
+  # remote server is a different thing again.
+  devcontainer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the Dev Container and use it
+        uses: devcontainers/ci@v0.3
+        with:
+          configFile: .devcontainer/devcontainer.json
+          push: never
+          runCmd: |
+            set -e
+            echo "--- the daemon 'make gds' guards on ---"
+            docker info > /dev/null
+            docker version --format '{{.Server.Version}}'
+            echo "--- the in-container delegation path ---"
+            make lint
+
+  full-flow:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      # --- PERFORMANCE OPTIMIZATION ---
+      # Cache the ~3GB Sky130 PDK to save CI time and bandwidth.
+      # Volare will automatically skip downloading if the target hash exists in this cached directory.
+      - name: Cache Sky130 PDK
+        id: cache-pdk
+        uses: actions/cache@v5
+        with:
+          path: pdks
+          key: sky130-pdk-${{ runner.os }}-v1
+          restore-keys: |
+            sky130-pdk-${{ runner.os }}-
+
+      # c4o-core's version tag is repeated three times because nothing here
+      # reads it from a single source: the Makefile drives `make gds`, this
+      # workflow pulls the image before the Makefile ever runs, and
+      # devcontainer.json is read by an external tool that never touches the
+      # Makefile at all. A tag bumped in one place and missed in another does
+      # not fail loudly -- it just means whoever builds locally, opens the
+      # Codespace, or runs this workflow silently gets a different c4o-core
+      # than everyone else. Runs before the pull below so a mismatch is
+      # caught as a config error, not paid for as a wasted image pull.
+      - name: Verify c4o-core image version is pinned consistently
+        run: |
+          python3 -c "
+          import json, os, re, sys
+
+          def read(path):
+              # A file that is not here is a file somebody removed on purpose --
+              # dropping .devcontainer/ is a reasonable thing to do with a
+              # template. Only the pins that are still here have to agree.
+              return open(path).read() if os.path.exists(path) else None
+
+          def matched(pattern, text):
+              m = re.search(pattern, text, re.M)
+              return m.group(1) if m else None
+
+          values = {}
+
+          makefile = read('Makefile')
+          if makefile is not None:
+              values['Makefile'] = matched(r'^C4O_IMAGE\s*:=\s*(\S+)', makefile)
+
+          workflow = read('.github/workflows/verify.yml')
+          if workflow is not None:
+              values['.github/workflows/verify.yml'] = matched(
+                  r'docker pull (ghcr\.io/\S+/c4o-core:\S+)', workflow)
+
+          devcontainer = read('.devcontainer/devcontainer.json')
+          if devcontainer is not None:
+              # devcontainer.json is JSONC; strip the line comments first.
+              stripped = re.sub(r'^\s*//.*\$', '', devcontainer, flags=re.M)
+              values['.devcontainer/devcontainer.json'] = json.loads(stripped).get('image')
+
+          # Present but unreadable means this step went stale, not that the pins
+          # disagree. Name the file rather than leaving a traceback nothing
+          # points anyone at.
+          for path, value in values.items():
+              if value is None:
+                  print(path + ': found no c4o-core image reference.')
+                  print('If you renamed or moved it, this step has to be updated too.')
+                  sys.exit(1)
+
+          if len(set(values.values())) > 1:
+              print('c4o-core image reference is inconsistent:')
+              for path in values:
+                  print('  ' + path + ': ' + values[path])
+              sys.exit(1)
+          print('c4o-core image reference is consistent: ' + next(iter(values.values())))
+          "
+
+      - name: Pull c4o-core Image
+        run: docker pull ghcr.io/anlit75/c4o-core:2.8
+
+      # The devcontainer runs as a named user so that files it creates on a
+      # Linux host stay owned by the host user. That user comes from the base
+      # image rather than from our Dockerfile, so assert it is really there --
+      # otherwise a future c4o-core rebuild breaks the devcontainer silently,
+      # in a way no other step here would catch.
+      - name: Verify the devcontainer user exists in its image
+        run: |
+          # devcontainer.json is JSONC, so strip line comments before parsing.
+          set -- $(python3 -c "
+          import json, re
+          src = open('.devcontainer/devcontainer.json').read()
+          d = json.loads(re.sub(r'^\s*//.*$', '', src, flags=re.M))
+          print(d['image'], d['remoteUser'])
+          ")
+          echo "image=$1 remoteUser=$2"
+          docker run --rm --entrypoint id "$1" -u "$2"
+
+      - name: 1. Lint Check
+        run: make lint
+
+      - name: 2. Simulation
+        run: make sim
+
+      # Cheap -- the tests run in well under a second -- so unlike the
+      # gate-level step below, this one runs on pull requests too.
+      #
+      # Skipped when config.yaml does not ask for Python testbenches. This is
+      # a template: somebody putting their own design in it may only want
+      # Verilog tests, and a starter kit whose CI goes red for a test kind you
+      # never opted into is a starter kit you abandon. The key's presence is
+      # the opt-in; if it IS there and matches no files, `make cocotb` fails,
+      # which is correct -- you asked for something that is not there.
+      - name: 2b. cocotb Tests
+        run: |
+          if ! grep -q '^"//COCOTB_TESTS":' config.yaml; then
+            echo "config.yaml has no //COCOTB_TESTS -- no Python testbenches to run."
+            exit 0
+          fi
+          make cocotb
+
+      - name: 3. Logic Synthesis
+        run: make synth
+
+      # Cheap, like the cocotb step: yosys stops after proc and opt, so this
+      # is under a second even though `make gds` below is three minutes.
+      - name: 3b. Schematic
+        run: |
+          make schematic
+          ls -lh build/schematic.svg
+          grep -qF "<svg" build/schematic.svg || { echo "not an SVG"; exit 1; }
+
+      - name: 4. Physical Design (GDSII)
+        # This step will automatically trigger 'make pdk' first
+        run: make gds
+
+      # Matched rather than named. `make gds` names its output after DESIGN_NAME
+      # in config.yaml, so hardcoding "blinky" meant the first thing anyone does
+      # with this template -- put their own design in it -- broke CI, on a line
+      # nothing points them at.
+      - name: Verify GDS Output
+        run: |
+          shopt -s nullglob
+          gds=(build/*.gds)
+          if [ ${#gds[@]} -eq 0 ]; then
+            echo "Error: make gds produced no .gds in build/"
+            exit 1
+          fi
+          for f in "${gds[@]}"; do
+            [ -s "$f" ] || { echo "Error: $f is empty"; exit 1; }
+          done
+          ls -lh "${gds[@]}"
+
+      # The render is what `report`'s layout row points at and what the
+      # artifact step below uploads. Both degrade to silence when it is
+      # missing: if-no-files-found stays on 'warn' so that a failed `make gds`
+      # does not produce a second, misleading red step -- which also means an
+      # upload of nothing would look green. So assert it here instead, where
+      # `make gds` has just succeeded and a missing render is a real problem.
+      - name: Verify the layout render exists
+        run: |
+          shopt -s nullglob
+          png=(runs/*/final/render/*.png)
+          if [ ${#png[@]} -eq 0 ]; then
+            echo "Error: the flow drew no layout render under runs/*/final/render/"
+            exit 1
+          fi
+          ls -lh "${png[@]}"
+
+      # Gate-level simulation of the netlist the step above just produced.
+      #
+      # Push-only, and a step rather than a job: it needs that netlist, so it
+      # could not run in parallel anyway, and keeping it here avoids shipping
+      # the whole build/ directory through the artifact store to get at it.
+      #
+      # Not on pull requests. blinky's led toggles once every 2**25 cycles and
+      # the netlist has no WIDTH left to shrink, so this costs ~4 minutes --
+      # measured here, not guessed. Paying that on every review round trip buys
+      # little: the netlist only changes when the RTL or the flow does, and
+      # merging to main catches that before any tag is cut.
+      #
+      # Phrased as "not a pull request" rather than "is a push" so that
+      # workflow_dispatch runs it too -- that is the way to exercise a branch's
+      # gate-level simulation before merging it, without paying for it on every
+      # review round trip.
+      #
+      # Skipped when config.yaml does not ask for it, for the reason the
+      # cocotb step gives -- and more so here: a gate-level testbench cannot
+      # reuse the RTL one's trick of shrinking the design through a parameter,
+      # so it is the hardest file in this repo to write. Requiring it of
+      # everyone who pushes their own design would mean red CI on their first
+      # push, for a test they were never told was mandatory.
+      - name: 5. Gate-Level Simulation
+        if: github.event_name != 'pull_request'
+        timeout-minutes: 15
+        run: |
+          if ! grep -q '^"//GATE_TESTS":' config.yaml; then
+            echo "config.yaml has no //GATE_TESTS -- no gate-level testbench to run."
+            exit 0
+          fi
+          make gatesim
+
+      # The schematic on its own, for the same reason the layout render gets
+      # one below: it is a small file people actually want to open, and it is
+      # otherwise only inside the ~10MB bundle. Its existence is already
+      # asserted in step 3b, so 'warn' here cannot hide a missing file.
+      - name: Upload the schematic
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: schematic
+          path: build/schematic.svg
+          if-no-files-found: warn
+          retention-days: 5
+
+      # The layout image on its own, because the bundle below is ~10MB and
+      # this is the one file in it anyone wants to look at. `report` prints
+      # its path; this makes it one click from the run summary instead.
+      - name: Upload the layout render
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: layout
+          path: runs/*/final/render/*.png
+          if-no-files-found: warn
+          retention-days: 5
+
+      # runs/ is no longer inside build/, so name both or the run itself --
+      # every log, netlist and report the flow produced -- stops being kept.
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: chipforall-build-artifacts
+          path: |
+            build/
+            runs/
+          retention-days: 5
+
+      # A v* tag publishes the GDS that the steps above just verified.
+      - name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          # A glob, for the same reason the verify step above uses one.
+          files: build/*.gds
+          generate_release_notes: true

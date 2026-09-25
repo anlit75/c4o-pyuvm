@@ -1,0 +1,68 @@
+# ChipForAll design configuration
+#
+# This is a LibreLane configuration file. The same file drives simulation and
+# linting through c4o-core and the physical design flow through LibreLane, so
+# the variable names are LibreLane's.
+#
+# 'dir::' marks a path as relative to this directory.
+
+# ============ what you normally change ============
+
+DESIGN_NAME: blinky
+
+# One line per source file. A glob does not work here: LibreLane validates
+# each entry as a literal path and never expands '**', so `dir::src/**/*.v`
+# lints, simulates and synthesises fine -- c4o-core does expand it -- and then
+# `make gds` stops with "'/workspace/src/**/*.v' does not exist". Measured in
+# CI, not guessed.
+VERILOG_FILES:
+  - dir::src/blinky.v
+
+# Simulation only. LibreLane has no testbench variable -- simulation sits
+# outside an RTL-to-GDSII flow -- and it ignores any key starting with '//',
+# which is what keeps this file valid for both tools.
+"//TEST_FILES":
+  - dir::test/*.v
+
+# Python testbenches, run by `make cocotb`. An alternative to TEST_FILES above,
+# not a replacement: same simulator underneath, driven from Python instead of
+# Verilog. See test/test_blinky_cocotb.py.
+"//COCOTB_TESTS":
+  - dir::test/*.py
+
+# Gate-level simulation, run by `make gatesim` against the netlist the GDS flow
+# produced. It lives in its own directory because the glob above is what `make
+# sim` runs, and the two testbenches are not interchangeable: synthesis resolves
+# parameters, so the gate-level one cannot shrink the design the way the RTL one
+# does. See test/gate/tb_blinky_gl.v.
+"//GATE_TESTS":
+  - dir::test/gate/*.v
+
+CLOCK_PORT: clk
+CLOCK_PERIOD: 10.0
+
+# ============ keep these unless you know what you are doing ============
+
+PDK: sky130A
+STD_CELL_LIBRARY: sky130_fd_sc_hd
+
+# The die sizes itself around your design: FP_SIZING: relative floorplans from
+# FP_CORE_UTIL (how full the core should be) instead of a fixed rectangle. Swap
+# in a bigger design and it grows; the old absolute 100x100 refused it instead.
+#
+# There is deliberately no DIE_AREA here. Relative sizing never reads it, but
+# one of the two GDS streamers still draws prBoundary from it, so a leftover
+# value fails signoff with a 1-count XOR difference against a boundary the flow
+# never used. Measured, not guessed: a run with FP_SIZING: relative and
+# DIE_AREA: [0,0,100,100] reported "1 XOR differences", every mask layer clean,
+# the difference being that 100x100 square minus the 69.485x80.205 die.
+#
+# To go back to a fixed die: set FP_SIZING: absolute and add DIE_AREA.
+FP_CORE_UTIL: 40
+FP_SIZING: relative
+
+# The blackbox stubs LibreLane generates for the PDK cells carry no timescale,
+# so TIMESCALEMOD fires once per cell -- 441 warnings, none of them from our
+# RTL. Same reason UNDRIVEN and UNUSEDSIGNAL are in the default list; they have
+# to be repeated here because this overrides rather than appends.
+LINTER_DISABLE_WARNINGS_BLACKBOX: [UNDRIVEN, UNUSEDSIGNAL, TIMESCALEMOD]
