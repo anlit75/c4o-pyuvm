@@ -1,4 +1,4 @@
-# ChipForAll design configuration
+# c4o-pyuvm design configuration
 #
 # This is a LibreLane configuration file. The same file drives simulation and
 # linting through c4o-core and the physical design flow through LibreLane, so
@@ -8,15 +8,13 @@
 
 # ============ what you normally change ============
 
-DESIGN_NAME: blinky
+DESIGN_NAME: apb_uart_sv
 
-# One line per source file. A glob does not work here: LibreLane validates
-# each entry as a literal path and never expands '**', so `dir::src/**/*.v`
-# lints, simulates and synthesises fine -- c4o-core does expand it -- and then
-# `make gds` stops with "'/workspace/src/**/*.v' does not exist". Measured in
-# CI, not guessed.
+# The generated Verilog, not the SystemVerilog it came from. `make rtl` writes
+# it; src/vendor/apb_uart_sv/README.md says why it is committed. A glob does
+# not work here: LibreLane validates each entry as a literal path.
 VERILOG_FILES:
-  - dir::src/blinky.v
+  - dir::src/apb_uart_sv.v
 
 # Simulation only. LibreLane has no testbench variable -- simulation sits
 # outside an RTL-to-GDSII flow -- and it ignores any key starting with '//',
@@ -24,21 +22,7 @@ VERILOG_FILES:
 "//TEST_FILES":
   - dir::test/*.v
 
-# Python testbenches, run by `make cocotb`. An alternative to TEST_FILES above,
-# not a replacement: same simulator underneath, driven from Python instead of
-# Verilog. See test/test_blinky_cocotb.py.
-"//COCOTB_TESTS":
-  - dir::test/*.py
-
-# Gate-level simulation, run by `make gatesim` against the netlist the GDS flow
-# produced. It lives in its own directory because the glob above is what `make
-# sim` runs, and the two testbenches are not interchangeable: synthesis resolves
-# parameters, so the gate-level one cannot shrink the design the way the RTL one
-# does. See test/gate/tb_blinky_gl.v.
-"//GATE_TESTS":
-  - dir::test/gate/*.v
-
-CLOCK_PORT: clk
+CLOCK_PORT: CLK
 CLOCK_PERIOD: 10.0
 
 # ============ keep these unless you know what you are doing ============
@@ -46,23 +30,39 @@ CLOCK_PERIOD: 10.0
 PDK: sky130A
 STD_CELL_LIBRARY: sky130_fd_sc_hd
 
-# The die sizes itself around your design: FP_SIZING: relative floorplans from
-# FP_CORE_UTIL (how full the core should be) instead of a fixed rectangle. Swap
-# in a bigger design and it grows; the old absolute 100x100 refused it instead.
-#
-# There is deliberately no DIE_AREA here. Relative sizing never reads it, but
-# one of the two GDS streamers still draws prBoundary from it, so a leftover
-# value fails signoff with a 1-count XOR difference against a boundary the flow
-# never used. Measured, not guessed: a run with FP_SIZING: relative and
-# DIE_AREA: [0,0,100,100] reported "1 XOR differences", every mask layer clean,
-# the difference being that 100x100 square minus the 69.485x80.205 die.
-#
-# To go back to a fixed die: set FP_SIZING: absolute and add DIE_AREA.
 FP_CORE_UTIL: 40
 FP_SIZING: relative
 
+# Two warnings, waived for two different reasons. Both measured with verilator
+# 5.020 against src/apb_uart_sv.v.
+#
+# LATCH is the DUT's, and not ours to fix:
+#
+#   %Warning-LATCH: Latch inferred for signal 'apb_uart_sv.fifo_tx_data'
+#                   (not all control paths of combinational always assign a
+#                   value)
+#
+# It is a real finding in somebody else's 2017 RTL -- an always_comb that does
+# not assign fifo_tx_data on every path -- and it survives the translation to
+# Verilog, so it is the design and not sv2v. Verifying a design you may not edit
+# is the exercise this repository is about, so it is waived with its reason
+# rather than patched out.
+#
+# WIDTHEXPAND is sv2v's:
+#
+#   %Warning-WIDTHEXPAND: Operator EQ expects 32 bits on the LHS, but LHS's
+#                         VARREF 'pointer_in' generates 4 bits.
+#
+# sv2v renders `$unsigned(BUFFER_DEPTH - 1)` as a 32-bit constant, and the
+# comparison against a 4-bit pointer is what verilator is objecting to. The
+# comparison is correct; the widths are the translator's.
+#
+# Named one code at a time on purpose: a third warning appearing still stops the
+# build rather than hiding behind a blanket waiver.
+LINTER_DISABLE_WARNINGS: [LATCH, WIDTHEXPAND]
+
 # The blackbox stubs LibreLane generates for the PDK cells carry no timescale,
-# so TIMESCALEMOD fires once per cell -- 441 warnings, none of them from our
-# RTL. Same reason UNDRIVEN and UNUSEDSIGNAL are in the default list; they have
-# to be repeated here because this overrides rather than appends.
+# so TIMESCALEMOD fires once per cell -- none of them from the design. Same
+# reason UNDRIVEN and UNUSEDSIGNAL are in the default list; they have to be
+# repeated here because this overrides rather than appends.
 LINTER_DISABLE_WARNINGS_BLACKBOX: [UNDRIVEN, UNUSEDSIGNAL, TIMESCALEMOD]
