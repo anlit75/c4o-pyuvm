@@ -22,6 +22,12 @@ VERILOG_FILES:
 "//TEST_FILES":
   - dir::test/*.v
 
+# The pyuvm tests. cocotb finds them by module name, so only the files that
+# define @cocotb.test() go here -- apb_agent.py and uart_env.py are imported by
+# them, from the same directory, which c4o-core puts on PYTHONPATH.
+"//COCOTB_TESTS":
+  - dir::test/test_*.py
+
 CLOCK_PORT: CLK
 
 # 90.9 MHz, and it took three measurements to earn that number rather than 100.
