@@ -236,6 +236,33 @@ jobs:
       # does not produce a second, misleading red step -- which also means an
       # upload of nothing would look green. So assert it here instead, where
       # `make gds` has just succeeded and a missing render is a real problem.
+      # `make report` says "setup slack -0.75 ns (24 violations)" and nothing
+      # says which paths. LibreLane wrote them down -- per corner, inside the
+      # STA step's directory -- but nothing points anyone at that, so a timing
+      # violation in this repository is a number you cannot look into unless you
+      # already know the step layout. Print them where the run can be read.
+      #
+      # Diagnostic, not a gate. Whether setup violations should stop the flow is
+      # LibreLane's call and it says warning, so this step does not second-guess
+      # it. It fails only when the report is missing or is not a timing report,
+      # which is what happens when the layout moves and a step like this quietly
+      # starts printing nothing -- so it lists what it did find before giving up.
+      - name: Print the setup paths the flow could not close
+        run: |
+          shopt -s nullglob
+          rpts=(runs/*/*-openroad-stapostpnr/*ss_*/checks.rpt)
+          if [ ${#rpts[@]} -eq 0 ]; then
+            echo "No slow-corner checks.rpt under runs/*/*-openroad-stapostpnr/."
+            echo "What is there:"
+            ls -d runs/*/*sta* 2>/dev/null || echo "  no STA step directory at all"
+            find runs -name 'checks.rpt' 2>/dev/null | head -20
+            exit 1
+          fi
+          rpt="${rpts[0]}"
+          echo "--- $rpt ---"
+          grep -qF "slack" "$rpt" || { echo "$rpt names no slack -- not a timing report"; exit 1; }
+          sed -n '/slack_max/,$p' "$rpt" | head -250
+
       - name: Verify the layout render exists
         run: |
           shopt -s nullglob

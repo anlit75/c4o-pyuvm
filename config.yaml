@@ -23,6 +23,16 @@ VERILOG_FILES:
   - dir::test/*.v
 
 CLOCK_PORT: CLK
+
+# 100 MHz, and the flow does not close it: -0.75 ns of setup slack across 24
+# paths in the three ss_100C_1v60 corners, hold clean, signoff clean. Relaxing
+# the constraint is not the fix, which was measured rather than assumed --
+# CLOCK_PERIOD 11.0 moved setup slack from -0.75 ns to -0.70 ns and kept all 24
+# violations, while power fell from 4.502 mW to 4.093 mW. The resizer spends a
+# looser constraint on power and leaves the same paths unrepaired, and the flow
+# says "Unable to repair all setup violations" either way. So the number stays at
+# the one somebody would actually ask for, and the paths it cannot close are
+# printed by CI instead of being a count nobody can look into.
 CLOCK_PERIOD: 10.0
 
 # ============ keep these unless you know what you are doing ============
