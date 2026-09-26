@@ -167,6 +167,25 @@ jobs:
           fi
           make cocotb
 
+      # test/uart_ral.py is generated from regs/apb_uart.rdl and committed, so a
+      # fresh clone can run the tests. Committing generated code buys that and
+      # costs the possibility of drift: edit the .rdl, forget `make ral`, and the
+      # tests keep checking the old map while the .rdl documents a new one.
+      #
+      # So regenerate it here and diff. The file is left exactly as peakrdl writes
+      # it -- no header of ours -- which is what makes this comparison the tool's
+      # output against the tool's output and nothing else.
+      - name: The register model matches the .rdl it came from
+        run: |
+          cp test/uart_ral.py /tmp/committed.py
+          make ral
+          if ! diff -u /tmp/committed.py test/uart_ral.py; then
+            echo "test/uart_ral.py is not what regs/apb_uart.rdl generates."
+            echo "Run 'make ral' and commit the result."
+            exit 1
+          fi
+          echo "test/uart_ral.py is byte-identical to what make ral produces."
+
       - name: 3. Logic Synthesis
         run: make synth
 

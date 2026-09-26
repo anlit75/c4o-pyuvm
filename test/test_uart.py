@@ -1,12 +1,17 @@
 """
-pyuvm tests for the vendored 16550 UART, driven entirely through its pins.
+The data path: three tests, all over the DUT's own loopback.
 
-Three tests, all over the DUT's own loopback: `tx_o` is tied back to `rx_i` in
-Python rather than in a Verilog wrapper, because cocotb elaborates the DUT as the
-root -- there is no testbench module to do the tie in. That turns out to be the
-right thing anyway: a coroutine copying one port to another works the same on the
-synthesised netlist, and nothing in these tests or in apb_agent.py reaches inside
-the design, so `cocotb --netlist` can run exactly this Python against the gates.
+`tx_o` is tied back to `rx_i` in Python rather than in a Verilog wrapper, because
+cocotb elaborates the DUT as the root -- there is no testbench module to do the
+tie in. That turns out to be the right thing anyway: a coroutine copying one port
+to another works the same on the synthesised netlist, and nothing in these tests
+or in apb_agent.py reaches inside the design, so `make cocotb-gl` runs exactly
+this Python against the gates.
+
+The registers are driven raw here, not through the register model. That is on
+purpose: THR, RBR, FCR and the divisor latches are the four things
+regs/apb_uart.rdl cannot describe, and its header says why. test_ral.py covers
+what the model does describe.
 
 `make cocotb SEED=<n>` repeats a random failure.
 """
@@ -14,21 +19,11 @@ the design, so `cocotb --netlist` can run exactly this Python against the gates.
 import random
 
 import cocotb
-from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles, Edge
-from pyuvm import ConfigDB, uvm_root, uvm_sequence, uvm_test
+from pyuvm import uvm_root, uvm_sequence
 
-from apb_agent import (DLAB, DLL, DLM, FCR, LCR, LSR, LSR_DATA_READY, RBR,
-                       THR, ApbTxn)
-from uart_env import UartEnv
+from apb_agent import DLAB, DLL, DLM, FCR, LCR, LSR, LSR_DATA_READY, RBR, THR, ApbTxn
+from uart_env import UartTest, bring_up
 
-# Nanoseconds, and `make rtl` puts a `timescale in the generated Verilog so that
-# they mean the same thing on the RTL and on the gates. cocotb's "step" unit does
-# not: a gate-level run compiles the PDK cell models alongside the netlist, those
-# carry 1ns/1ps, and a step there is a picosecond -- while the RTL on its own has
-# no timescale at all, so a step is a second. The same two-step clock was 2 ps of
-# gates and 2 s of RTL, which is how `make cocotb-gl` first failed.
-CLOCK_PERIOD_NS = 10
 DIVISOR = 4             # cycles per UART bit, minus one
 
 # A frame is ten bits of (DIVISOR + 1) cycles, so a byte needs ~50. Polling far
@@ -92,34 +87,18 @@ class UartSeq(uvm_sequence):
         await self.read(RBR)
 
 
-class UartTestBase(uvm_test):
-    payload = ()
+class LoopbackTest(UartTest):
+    """One known byte, so a failure here means nothing else is worth reading."""
+    payload = (0xA5,)
     burst = False
 
-    def build_phase(self):
-        # Here, not in bring_up: uvm_root().run_test() clears the singletons
-        # before it builds the tree, so anything put in the ConfigDB beforehand
-        # is gone by the time the agent looks for it. uvm_test_top's build_phase
-        # runs before its children's, which is early enough.
-        ConfigDB().set(None, "*", "dut", cocotb.top)
-        self.env = UartEnv("env", self)
-
-    async def run_phase(self):
-        self.raise_objection()
-        # Logged so that a random failure is reproducible from the log alone:
-        # the bytes are here and cocotb prints the seed that produced them.
+    async def run(self):
         self.logger.info("payload: " + " ".join(f"{b:02x}" for b in self.payload))
         seq = UartSeq("seq", self.payload, burst=self.burst)
         await seq.start(self.env.agent.sequencer)
-        self.drop_objection()
 
 
-class LoopbackTest(UartTestBase):
-    """One known byte, so a failure here means nothing else is worth reading."""
-    payload = (0xA5,)
-
-
-class RandomBytesTest(UartTestBase):
+class RandomBytesTest(LoopbackTest):
     """One byte at a time, twenty times, so the FIFO pointers wrap past 16.
 
     The payload is built when this module is imported, and cocotb seeds Python's
@@ -129,7 +108,7 @@ class RandomBytesTest(UartTestBase):
     payload = tuple(random.randrange(256) for _ in range(20))
 
 
-class BurstTest(UartTestBase):
+class BurstTest(LoopbackTest):
     """A full TX FIFO in one go, then drained in order.
 
     16 is TX_FIFO_DEPTH. Sending them one at a time, as the test above does,
@@ -138,33 +117,6 @@ class BurstTest(UartTestBase):
     """
     payload = tuple(random.randrange(256) for _ in range(16))
     burst = True
-
-
-async def bring_up(dut):
-    """Clock, reset, and the loopback that makes the DUT talk to itself."""
-    cocotb.start_soon(Clock(dut.CLK, CLOCK_PERIOD_NS, units="ns").start())
-
-    dut.RSTN.value = 0
-    dut.PSEL.value = 0
-    dut.PENABLE.value = 0
-    dut.PWRITE.value = 0
-    dut.PADDR.value = 0
-    dut.PWDATA.value = 0
-    dut.rx_i.value = 1          # an idle line is high; 0 would look like a start bit
-    await ClockCycles(dut.CLK, 4)
-    dut.RSTN.value = 1
-    await ClockCycles(dut.CLK, 4)
-
-    # Driven off tx_o changing rather than off the clock. A clocked mirror reads
-    # the pre-edge value and so adds a cycle of latency to the serial line, which
-    # the RTL tolerates and the netlist -- compiled with -DUNIT_DELAY, so every
-    # cell costs a step -- might not. A wire has no latency; this is a wire.
-    async def tie_tx_to_rx():
-        dut.rx_i.value = dut.tx_o.value
-        while True:
-            await Edge(dut.tx_o)
-            dut.rx_i.value = dut.tx_o.value
-    cocotb.start_soon(tie_tx_to_rx())
 
 
 @cocotb.test()

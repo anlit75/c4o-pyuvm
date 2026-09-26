@@ -14,8 +14,9 @@ on the gates with an AttributeError.
 """
 
 from cocotb.triggers import RisingEdge
-from pyuvm import (ConfigDB, uvm_agent, uvm_analysis_port, uvm_driver,
-                   uvm_monitor, uvm_sequence_item, uvm_sequencer)
+from pyuvm import (ConfigDB, uvm_access_e, uvm_agent, uvm_analysis_port,
+                   uvm_driver, uvm_monitor, uvm_reg_adapter, uvm_sequence_item,
+                   uvm_sequencer, uvm_status_e)
 
 # 16550 offsets, from the DUT's own parameter list. The pairs share an address:
 # THR is a write and RBR the read at 0x0, FCR a write and IIR the read at 0x2,
@@ -114,3 +115,29 @@ class ApbAgent(uvm_agent):
     def connect_phase(self):
         self.driver.seq_item_port.connect(self.sequencer.seq_item_export)
         self.ap = self.monitor.ap
+
+
+class ApbRegAdapter(uvm_reg_adapter):
+    """Between the register layer and this agent.
+
+    The registers are eight bits wide and the bus is thirty-two, because the
+    design decodes PADDR[2:0] as a byte index and returns the byte in
+    PRDATA[7:0]. So a read is masked here rather than left for the register
+    layer to interpret: regs/apb_uart.rdl says regwidth = 8, and this is the
+    line that makes that true of the bus.
+    """
+
+    def reg2bus(self, rw):
+        return ApbTxn("reg_op", addr=rw.addr, data=rw.data,
+                      write=rw.kind == uvm_access_e.UVM_WRITE)
+
+    def bus2reg(self, bus_item, rw):
+        rw.kind = (uvm_access_e.UVM_WRITE if bus_item.write
+                   else uvm_access_e.UVM_READ)
+        rw.addr = bus_item.addr
+        rw.data = bus_item.data & 0xFF if bus_item.write else bus_item.rdata & 0xFF
+        # uvm_reg_bus_op.status defaults to UVM_NOT_OK, so this has to be set
+        # rather than left alone. PREADY is tied high and PSLVERR tied low in this
+        # design, so there is no bus failure to translate: every transfer that
+        # completes, completed.
+        rw.status = uvm_status_e.UVM_IS_OK

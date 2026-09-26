@@ -1,0 +1,97 @@
+// The register map of src/vendor/apb_uart_sv/, as that design actually decodes
+// it -- not as the 16550 datasheet describes it.
+//
+// `make ral` turns this into test/uart_ral.py with `peakrdl pyuvm`, so the RAL
+// the tests use and this description cannot drift. Fields, reset values and
+// access are all taken from the RTL's own decode (apb_uart_sv.v, the two always
+// @(*) blocks around lines 158 and 193), and every reset value here is the one
+// the RTL assigns, which is what makes a reset check worth running.
+//
+// Four things in this map cannot be written down in SystemRDL, and they are the
+// interesting part:
+//
+//   1. THR/RBR at 0x0 is not a register. A write pushes into the TX FIFO and a
+//      read pops the RX FIFO, so there is no storage to mirror -- write 0xA5 and
+//      the next read returns whatever the serial line delivered, which may be a
+//      different byte or none. It is left out. The loopback tests in
+//      test/test_uart.py verify that path instead, which is the right tool: UVM
+//      has uvm_reg_fifo for FIFO ports, and PeakRDL does not generate it.
+//
+//   2. FCR at 0x2 is write-only and shares its address with IIR, which is
+//      read-only, and the two have unrelated hardware. SystemRDL's `alias` is
+//      the mechanism for two views of one address, but it is a view of the same
+//      storage: peakrdl refuses
+//
+//        error: Alias register 'FCR' contains field 'TX_CLR' that does not
+//        exist in the primary register.
+//
+//      So IIR is described and FCR is not. The tests write FCR through the APB
+//      agent directly.
+//
+//   3. The divisor latches DLL and DLM replace THR and IER entirely while
+//      LCR[7] (DLAB) is set. That is a dynamic bank select, and SystemRDL has no
+//      way to say it -- a register's address does not depend on another
+//      register's contents. Also driven through the agent.
+//
+//   4. MCR (0x4), MSR (0x6) and SCR (0x7) are absent on purpose. The RTL resets
+//      storage for them and then never decodes a read or a write, so they read
+//      back as 0 from the decode's default branch. Describing them as registers
+//      would make the RAL predict values the design cannot return.
+
+addrmap apb_uart {
+    name = "apb_uart_sv register map";
+    default regwidth = 8;
+    default accesswidth = 8;
+
+    reg {
+        name = "Interrupt Enable Register";
+        desc = "Only [2:0] reach the design: IER_i(regs_q[IER*8+2 -: 3]).";
+
+        field { sw = rw; hw = r; desc = "Received data available"; } RDA[0:0] = 0;
+        field { sw = rw; hw = r; desc = "Transmitter holding register empty"; } THRE[1:1] = 0;
+        field { sw = rw; hw = r; desc = "Receiver line status"; } RLS[2:2] = 0;
+    } IER @ 0x1;
+
+    reg {
+        name = "Interrupt Identification Register";
+        desc = "Read-only, and not from regs_q: PRDATA = {4'b1100, IIR_o}. The
+                4'b1100 is hardwired and IIR_o is uart_interrupt's iir_q, which
+                resets to 4'b0001 -- so a reset read returns 0xC1.";
+
+        field { sw = r; hw = w; desc = "Interrupt id; [0] set means none pending"; } INT_ID[3:0] = 0x1;
+        field { sw = r; hw = na; desc = "Hardwired 0 in PRDATA"; } RSVD[5:4] = 0;
+        field { sw = r; hw = na; desc = "Hardwired 1: the FIFOs are always enabled"; } FIFO_EN[7:6] = 0x3;
+    } IIR @ 0x2;
+
+    reg {
+        name = "Line Control Register";
+        desc = "Written as a whole byte. [6:4] are stored and never used by the
+                design -- there is no break generation, no stick parity and no
+                even-parity select in this RTL.";
+
+        field { sw = rw; hw = r; desc = "Word length select; 2'b11 is 8 bits"; } WLS[1:0] = 0;
+        field { sw = rw; hw = r; desc = "Stop bits. Honoured by uart_rx and NOT by uart_tx: cfg_stop_bits_i is commented out on the TX instance at apb_uart_sv.sv:87."; } STB[2:2] = 0;
+        field { sw = rw; hw = r; desc = "Parity enable"; } PEN[3:3] = 0;
+        field { sw = rw; hw = na; desc = "Even parity select -- stored, unused"; } EPS[4:4] = 0;
+        field { sw = rw; hw = na; desc = "Stick parity -- stored, unused"; } SP[5:5] = 0;
+        field { sw = rw; hw = na; desc = "Break control -- stored, unused"; } BC[6:6] = 0;
+        field { sw = rw; hw = r; desc = "Divisor latch access; see note 3"; } DLAB[7:7] = 0;
+    } LCR @ 0x3;
+
+    reg {
+        name = "Line Status Register";
+        desc = "Reset 0x60. Only [6], [5], [2] and [0] are ever updated; [7],
+                [4], [3] and [1] keep their reset value of 0 forever, because
+                the design has no write path to LSR and regs_n only assigns
+                those four bits.";
+
+        field { sw = r; hw = w; desc = "Data ready: the RX FIFO is not empty"; } DR[0:0] = 0;
+        field { sw = r; hw = na; desc = "Overrun error -- stuck at 0"; } OE[1:1] = 0;
+        field { sw = r; hw = w; desc = "Parity error, from fifo_rx_data[8]"; } PE[2:2] = 0;
+        field { sw = r; hw = na; desc = "Framing error -- stuck at 0"; } FE[3:3] = 0;
+        field { sw = r; hw = na; desc = "Break interrupt -- stuck at 0"; } BI[4:4] = 0;
+        field { sw = r; hw = w; desc = "Transmit FIFO empty"; } THRE[5:5] = 1;
+        field { sw = r; hw = w; desc = "Transmitter empty: FIFO drained and the serialiser idle"; } TEMT[6:6] = 1;
+        field { sw = r; hw = na; desc = "FIFO error -- stuck at 0"; } FIFOERR[7:7] = 0;
+    } LSR @ 0x5;
+};
