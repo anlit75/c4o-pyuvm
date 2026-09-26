@@ -24,15 +24,10 @@ VERILOG_FILES:
 
 CLOCK_PORT: CLK
 
-# 100 MHz, and the flow does not close it: -0.75 ns of setup slack across 24
-# paths in the three ss_100C_1v60 corners, hold clean, signoff clean. Relaxing
-# the constraint is not the fix, which was measured rather than assumed --
-# CLOCK_PERIOD 11.0 moved setup slack from -0.75 ns to -0.70 ns and kept all 24
-# violations, while power fell from 4.502 mW to 4.093 mW. The resizer spends a
-# looser constraint on power and leaves the same paths unrepaired, and the flow
-# says "Unable to repair all setup violations" either way. So the number stays at
-# the one somebody would actually ask for, and the paths it cannot close are
-# printed by CI instead of being a count nobody can look into.
+# 100 MHz. Relaxing this is not how the design closes timing, which was measured
+# rather than assumed -- CLOCK_PERIOD 11.0 moved setup slack from -0.75 ns to
+# -0.70 ns and kept all 24 violations, because the I/O budget below scales with
+# the period and eats most of what you add. See IO_DELAY_CONSTRAINT.
 CLOCK_PERIOD: 10.0
 
 # ============ keep these unless you know what you are doing ============
@@ -42,6 +37,32 @@ STD_CELL_LIBRARY: sky130_fd_sc_hd
 
 FP_CORE_UTIL: 40
 FP_SIZING: relative
+
+# The sky130 default is 20, meaning a fifth of every clock period is reserved as
+# external delay on the ports -- 2 ns out of 10. That default is for a design
+# whose pins drive a package and a board. This one is a block: PRDATA goes to an
+# APB master on the same die.
+#
+# Left at 20, the flow does not close 100 MHz, and every violating path ends at a
+# port. From the report CI now prints:
+#
+#   Startpoint: uart_rx_fifo_i.pointer_out[1] (rising edge-triggered flip-flop)
+#   Endpoint: PRDATA[4] (out)
+#                                8.502929   data arrival time
+#                  10.000000    10.000000   clock CLK (rise edge)
+#                  -0.250000     9.750000   clock uncertainty
+#                  -2.000000     7.750000   output external delay
+#                                7.750000   data required time
+#                               -0.752928   slack (VIOLATED)
+#
+# The design needs 8.50 ns and is given 7.75. Two of the missing nanoseconds are
+# a board that does not exist, which is also why adding period does not help:
+# required time is 0.8 x period - 0.25, so a nanosecond of relaxation returns
+# 0.8 ns and the resizer spends the rest on power.
+#
+# At 5 the budget is 0.5 ns, which is a same-die hop, and the arrival time above
+# fits. Not zero: a port with no external delay at all is a different lie.
+IO_DELAY_CONSTRAINT: 5
 
 # Two warnings, waived for two different reasons. Both measured with verilator
 # 5.020 against src/apb_uart_sv.v.

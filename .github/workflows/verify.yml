@@ -263,6 +263,31 @@ jobs:
           grep -qF "slack" "$rpt" || { echo "$rpt names no slack -- not a timing report"; exit 1; }
           sed -n '/slack_max/,$p' "$rpt" | head -250
 
+      # The flow reports setup violations as a warning, so without this step the
+      # repository can go green on a design that misses its own clock -- which it
+      # did, for two runs. `make report` already prints the numbers; this is what
+      # makes them count.
+      #
+      # A gate and not another warning, on purpose. IO_DELAY_CONSTRAINT in
+      # config.yaml is pinned so that this design closes 100 MHz, and a claim
+      # nothing checks is a claim that rots. It runs after the step above, so a
+      # failure here comes with the paths already printed.
+      - name: Timing closes
+        run: |
+          report=$(make report)
+          echo "$report"
+          setup=$(echo "$report" | grep "setup slack")
+          hold=$(echo "$report" | grep "hold slack")
+          for row in "$setup" "$hold"; do
+            case "$row" in
+              *"(0 violations)") ;;
+              *) echo "Timing does not close:$row"
+                 echo "The violating paths are in the step above."
+                 exit 1 ;;
+            esac
+          done
+          echo "Timing closes:$setup /$hold"
+
       - name: Verify the layout render exists
         run: |
           shopt -s nullglob
