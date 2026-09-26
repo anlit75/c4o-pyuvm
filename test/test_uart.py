@@ -15,19 +15,20 @@ import random
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles, RisingEdge
+from cocotb.triggers import ClockCycles, Edge
 from pyuvm import ConfigDB, uvm_root, uvm_sequence, uvm_test
 
 from apb_agent import (DLAB, DLL, DLM, FCR, LCR, LSR, LSR_DATA_READY, RBR,
                        THR, ApbTxn)
 from uart_env import UartEnv
 
-# Time is counted in clock cycles, not nanoseconds. The generated Verilog carries
-# no `timescale -- there is no testbench module to put one in, since cocotb
-# elaborates the DUT as the root -- so Icarus runs at a precision of one second
-# and asking for a 10 ns period is an error. It costs nothing: the design is
-# fully synchronous and contains no delays, so only the order of edges matters.
-CLOCK_PERIOD_STEPS = 2
+# Nanoseconds, and `make rtl` puts a `timescale in the generated Verilog so that
+# they mean the same thing on the RTL and on the gates. cocotb's "step" unit does
+# not: a gate-level run compiles the PDK cell models alongside the netlist, those
+# carry 1ns/1ps, and a step there is a picosecond -- while the RTL on its own has
+# no timescale at all, so a step is a second. The same two-step clock was 2 ps of
+# gates and 2 s of RTL, which is how `make cocotb-gl` first failed.
+CLOCK_PERIOD_NS = 10
 DIVISOR = 4             # cycles per UART bit, minus one
 
 # A frame is ten bits of (DIVISOR + 1) cycles, so a byte needs ~50. Polling far
@@ -141,7 +142,7 @@ class BurstTest(UartTestBase):
 
 async def bring_up(dut):
     """Clock, reset, and the loopback that makes the DUT talk to itself."""
-    cocotb.start_soon(Clock(dut.CLK, CLOCK_PERIOD_STEPS, units="step").start())
+    cocotb.start_soon(Clock(dut.CLK, CLOCK_PERIOD_NS, units="ns").start())
 
     dut.RSTN.value = 0
     dut.PSEL.value = 0
@@ -154,9 +155,14 @@ async def bring_up(dut):
     dut.RSTN.value = 1
     await ClockCycles(dut.CLK, 4)
 
+    # Driven off tx_o changing rather than off the clock. A clocked mirror reads
+    # the pre-edge value and so adds a cycle of latency to the serial line, which
+    # the RTL tolerates and the netlist -- compiled with -DUNIT_DELAY, so every
+    # cell costs a step -- might not. A wire has no latency; this is a wire.
     async def tie_tx_to_rx():
+        dut.rx_i.value = dut.tx_o.value
         while True:
-            await RisingEdge(dut.CLK)
+            await Edge(dut.tx_o)
             dut.rx_i.value = dut.tx_o.value
     cocotb.start_soon(tie_tx_to_rx())
 
