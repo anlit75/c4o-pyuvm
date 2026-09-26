@@ -62,7 +62,7 @@ else
 	C4O_SV2V := $(DOCKER_RUN) --entrypoint sv2v $(C4O_IMAGE)
 endif
 
-.PHONY: all help rtl lint sim cocotb gatesim synth schematic gds pdk report clean distclean shell
+.PHONY: all help rtl lint sim cocotb cocotb-gl gatesim synth schematic gds pdk report clean distclean shell
 
 all: lint sim cocotb synth
 
@@ -71,8 +71,9 @@ help:
 	@echo "  make rtl     - Regenerate src/apb_uart_sv.v from the vendored SystemVerilog"
 	@echo "  make lint    - Run Verilator lint check"
 	@echo "  make sim     - Run Icarus Verilog simulation"
-	@echo "  make cocotb  - Run the Python (cocotb) testbenches"
+	@echo "  make cocotb  - Run the pyuvm testbenches against the RTL"
 	@echo "                 (repeat a random failure: make cocotb SEED=<n>)"
+	@echo "  make cocotb-gl - Run the same tests against the netlist (after make gds)"
 	@echo "  make gatesim - Re-simulate the synthesised netlist (~5 min, after make gds)"
 	@echo "  make synth   - Run Yosys synthesis"
 	@echo "  make schematic - Draw the circuit as build/schematic.svg"
@@ -134,17 +135,28 @@ sim:
 	$(C4O_CMD) sim
 
 # The same RTL, driven from Python instead of Verilog. Not a replacement for
-# `make sim`: it is a second way to write a testbench, and the example shows the
-# thing Python is better at -- writing to a signal inside the design.
+# `make sim`: that one is the smoke test, and this is where the verification
+# lives -- a pyuvm environment with an APB agent and a scoreboard.
 cocotb:
 	$(C4O_COCOTB) cocotb
+
+# The same tests again, against the gates. Not a different testbench: the exact
+# same three tests, the exact same Python, driving runs/<tag>/final/nl/ instead
+# of src/. That only works because nothing in test/ touches anything but the
+# top-level ports -- reach inside the design and this target is where you find
+# out, with an AttributeError naming the net that synthesis removed.
+#
+# Needs `make gds` first, for the netlist.
+cocotb-gl:
+	$(C4O_COCOTB) cocotb --netlist
 
 # Simulates runs/<tag>/final/nl/, which `make gds` leaves behind, against
 # the PDK's own cell models. `make sim` says the RTL behaves; this says the gates
 # synthesis produced still behave, which is a different claim.
 #
-# Budget four to five minutes: the netlist has no WIDTH left to shrink, so
-# test/gate/tb_blinky_gl.v has to run the divider's full 2**26 cycles.
+# Wants its own Verilog testbench under test/gate/, named by //GATE_TESTS in
+# config.yaml. There is none: `make cocotb-gl` above covers the same ground
+# without a second testbench to keep in step with the first.
 gatesim:
 	$(C4O_CMD) gatesim
 

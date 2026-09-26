@@ -15,7 +15,7 @@ import random
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles, RisingEdge
+from cocotb.triggers import ClockCycles, Edge
 from pyuvm import ConfigDB, uvm_root, uvm_sequence, uvm_test
 
 from apb_agent import (DLAB, DLL, DLM, FCR, LCR, LSR, LSR_DATA_READY, RBR,
@@ -154,9 +154,14 @@ async def bring_up(dut):
     dut.RSTN.value = 1
     await ClockCycles(dut.CLK, 4)
 
+    # Driven off tx_o changing rather than off the clock. A clocked mirror reads
+    # the pre-edge value and so adds a cycle of latency to the serial line, which
+    # the RTL tolerates and the netlist -- compiled with -DUNIT_DELAY, so every
+    # cell costs a step -- might not. A wire has no latency; this is a wire.
     async def tie_tx_to_rx():
+        dut.rx_i.value = dut.tx_o.value
         while True:
-            await RisingEdge(dut.CLK)
+            await Edge(dut.tx_o)
             dut.rx_i.value = dut.tx_o.value
     cocotb.start_soon(tie_tx_to_rx())
 

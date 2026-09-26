@@ -298,6 +298,28 @@ jobs:
           fi
           ls -lh "${png[@]}"
 
+      # The point of this repository, in one step: the same three pyuvm tests
+      # that ran against the RTL in step 2b, run again against the gates that
+      # `make gds` just produced. Not a second testbench -- the same Python.
+      #
+      # It only works because nothing in test/ reaches inside the design. If
+      # something does, this is where it shows up, as an AttributeError naming a
+      # net synthesis removed, and that is worth catching on every pull request
+      # rather than at a tag.
+      #
+      # Asserts the count, not just the exit code: `make cocotb-gl` would also
+      # exit 0 having somehow run one test, and one test passing on the gates is
+      # not the claim.
+      - name: The same tests, against the gates
+        run: |
+          set -o pipefail
+          make cocotb-gl 2>&1 | tee build/cocotb-gl.log
+          grep -qF "TESTS=3 PASS=3 FAIL=0 SKIP=0" build/cocotb-gl.log || {
+            echo "cocotb-gl did not report three passing tests -- see above."
+            exit 1
+          }
+          grep -qF "All cocotb tests passed." build/cocotb-gl.log
+
       # Gate-level simulation of the netlist the step above just produced.
       #
       # Push-only, and a step rather than a job: it needs that netlist, so it
