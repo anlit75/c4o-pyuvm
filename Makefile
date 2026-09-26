@@ -46,29 +46,32 @@ ENTRYPOINT_SCRIPT := /opt/c4o-core/scripts/entrypoint.py
 # 2 renames it again (COCOTB_RANDOM_SEED). Translating at this line is what
 # keeps `make cocotb SEED=...` the same command across that change.
 #
-# C4O_SV2V is the one place a tool from the image is reached directly rather
-# than through the entrypoint. sv2v is not a c4o-core command -- it is a binary
-# the image carries -- so on the host it needs --entrypoint, and in the
-# container it is just on PATH.
+# C4O_SV2V and C4O_PEAKRDL are the two tools from the image reached directly
+# rather than through the entrypoint. Neither is a c4o-core command -- they are
+# binaries the image carries -- so on the host they need --entrypoint, and in the
+# container they are just on PATH.
 ifneq ($(wildcard $(ENTRYPOINT_SCRIPT)),)
 	# Case A: We are inside the DevContainer
 	C4O_CMD := python3 $(ENTRYPOINT_SCRIPT)
 	C4O_COCOTB = $(if $(SEED),env RANDOM_SEED=$(SEED)) $(C4O_CMD)
 	C4O_SV2V := sv2v
+	C4O_PEAKRDL := peakrdl
 else
 	# Case B: We are on the Host Machine
 	C4O_CMD := $(DOCKER_RUN) $(C4O_IMAGE)
 	C4O_COCOTB = $(DOCKER_RUN) $(if $(SEED),-e RANDOM_SEED=$(SEED)) $(C4O_IMAGE)
 	C4O_SV2V := $(DOCKER_RUN) --entrypoint sv2v $(C4O_IMAGE)
+	C4O_PEAKRDL := $(DOCKER_RUN) --entrypoint peakrdl $(C4O_IMAGE)
 endif
 
-.PHONY: all help rtl lint sim cocotb cocotb-gl gatesim synth schematic gds pdk report clean distclean shell
+.PHONY: all help rtl ral lint sim cocotb cocotb-gl gatesim synth schematic gds pdk report clean distclean shell
 
 all: lint sim cocotb synth
 
 help:
 	@echo "Available targets:"
 	@echo "  make rtl     - Regenerate src/apb_uart_sv.v from the vendored SystemVerilog"
+	@echo "  make ral     - Regenerate test/uart_ral.py from regs/apb_uart.rdl"
 	@echo "  make lint    - Run Verilator lint check"
 	@echo "  make sim     - Run Icarus Verilog simulation"
 	@echo "  make cocotb  - Run the pyuvm testbenches against the RTL"
@@ -133,6 +136,18 @@ rtl:
 		echo ""; \
 		$(C4O_SV2V) $(VENDOR_SV); \
 	} > src/apb_uart_sv.v
+
+# regs/apb_uart.rdl is the register map, and test/uart_ral.py is what PeakRDL
+# makes of it. Committed for the same reason src/apb_uart_sv.v is: a fresh clone
+# has to be able to run the tests, and CI regenerates and diffs so the two cannot
+# drift.
+#
+# The output is left exactly as peakrdl writes it -- no header of ours -- so that
+# the diff in CI is against the tool's output and nothing else. What the map says
+# and what it cannot say is written in the .rdl.
+ral:
+	@echo "🟢 peakrdl pyuvm: regs/apb_uart.rdl -> test/uart_ral.py"
+	$(C4O_PEAKRDL) pyuvm regs/apb_uart.rdl -o test/uart_ral.py
 
 # --- Logic Delegated to c4o-core ---
 

@@ -165,7 +165,30 @@ jobs:
             echo "config.yaml has no //COCOTB_TESTS -- no Python testbenches to run."
             exit 0
           fi
-          make cocotb
+          # Kept, because the gate-level step compares its own verdicts against
+          # this run's rather than against a number written in this file.
+          mkdir -p build
+          set -o pipefail
+          make cocotb 2>&1 | tee build/cocotb-rtl.log
+
+      # test/uart_ral.py is generated from regs/apb_uart.rdl and committed, so a
+      # fresh clone can run the tests. Committing generated code buys that and
+      # costs the possibility of drift: edit the .rdl, forget `make ral`, and the
+      # tests keep checking the old map while the .rdl documents a new one.
+      #
+      # So regenerate it here and diff. The file is left exactly as peakrdl writes
+      # it -- no header of ours -- which is what makes this comparison the tool's
+      # output against the tool's output and nothing else.
+      - name: The register model matches the .rdl it came from
+        run: |
+          cp test/uart_ral.py /tmp/committed.py
+          make ral
+          if ! diff -u /tmp/committed.py test/uart_ral.py; then
+            echo "test/uart_ral.py is not what regs/apb_uart.rdl generates."
+            echo "Run 'make ral' and commit the result."
+            exit 1
+          fi
+          echo "test/uart_ral.py is byte-identical to what make ral produces."
 
       - name: 3. Logic Synthesis
         run: make synth
@@ -312,13 +335,41 @@ jobs:
       # not the claim.
       - name: The same tests, against the gates
         run: |
+          if [ ! -f build/cocotb-rtl.log ]; then
+            echo "Step 2b ran no Python testbenches, so there is nothing to re-run."
+            exit 0
+          fi
           set -o pipefail
           make cocotb-gl 2>&1 | tee build/cocotb-gl.log
-          grep -qF "TESTS=3 PASS=3 FAIL=0 SKIP=0" build/cocotb-gl.log || {
-            echo "cocotb-gl did not report three passing tests -- see above."
-            exit 1
+
+          # Compared against the RTL run's own summary, not against a count
+          # written here. This step's claim is that the gates run the same tests
+          # as the RTL and reach the same verdicts, and that is exactly what the
+          # two lines being identical says. A hardcoded number said something
+          # weaker and needed editing every time a test was added -- which is how
+          # this step first went red, on three new tests that all passed.
+          # `|| true` because a log with no summary line is a case this step
+          # reports, not one it should die on: under `bash -e` with pipefail an
+          # empty grep would kill the script at the assignment below, before the
+          # message that explains why.
+          summary() {
+            grep -o 'TESTS=[0-9]* PASS=[0-9]* FAIL=[0-9]* SKIP=[0-9]*' "$1" | tail -1 || true
           }
-          grep -qF "All cocotb tests passed." build/cocotb-gl.log
+          rtl=$(summary build/cocotb-rtl.log)
+          gates=$(summary build/cocotb-gl.log)
+          echo "RTL:   $rtl"
+          echo "gates: $gates"
+
+          case "$gates" in
+            "") echo "The gate-level run printed no summary line at all."; exit 1 ;;
+            *"FAIL=0 SKIP=0") ;;
+            *) echo "The gate-level run did not pass everything it ran."; exit 1 ;;
+          esac
+          if [ "$rtl" != "$gates" ]; then
+            echo "The gates did not run the same tests as the RTL, which is what this"
+            echo "step is for. Compare the two lines above."
+            exit 1
+          fi
 
       # Gate-level simulation of the netlist the step above just produced.
       #
