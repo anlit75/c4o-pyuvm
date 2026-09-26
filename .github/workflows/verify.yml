@@ -182,6 +182,37 @@ jobs:
         # This step will automatically trigger 'make pdk' first
         run: make gds
 
+      # config.yaml turns ERROR_ON_SYNTH_CHECKS off, because the DUT's register
+      # file has eight dead self-looping bits that would otherwise stop the flow
+      # before it draws anything. The reason is written there, at length. This is
+      # the assertion that stands in for the check it disabled: exactly eight
+      # problems before opt, all eight naming regs_q, and a clean report after.
+      #
+      # A real combinational loop added to this design moves one of those three
+      # numbers, so it goes red here instead of passing quietly.
+      - name: The synthesis checks the flow was told not to fail on are the known ones
+        run: |
+          pre=$(ls runs/*/*-yosys-synthesis/reports/pre_synth_chk.rpt)
+          post=$(ls runs/*/*-yosys-synthesis/reports/chk.rpt)
+          echo "--- $pre ---"
+          cat "$pre"
+          grep -qF "Found and reported 8 problems." "$pre" || {
+            echo "The pre-synthesis check no longer reports exactly 8 problems. They are above."
+            exit 1
+          }
+          loops=$(grep -c "found logic loop" "$pre")
+          regs=$(grep -c 'wire \\regs_q \[[0-7]\]' "$pre")
+          if [ "$loops" != 8 ] || [ "$regs" != 8 ]; then
+            echo "Expected 8 logic loops, all of them regs_q[7:0]; got $loops loops and $regs regs_q bits."
+            exit 1
+          fi
+          grep -qF "Found and reported 0 problems." "$post" || {
+            echo "The check after opt is no longer clean:"
+            cat "$post"
+            exit 1
+          }
+          echo "8 pre-synthesis loops, all regs_q[7:0]; nothing left after opt."
+
       # Matched rather than named. `make gds` names its output after DESIGN_NAME
       # in config.yaml, so hardcoding "blinky" meant the first thing anyone does
       # with this template -- put their own design in it -- broke CI, on a line

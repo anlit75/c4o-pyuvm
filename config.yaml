@@ -66,3 +66,33 @@ LINTER_DISABLE_WARNINGS: [LATCH, WIDTHEXPAND]
 # reason UNDRIVEN and UNUSEDSIGNAL are in the default list; they have to be
 # repeated here because this overrides rather than appends.
 LINTER_DISABLE_WARNINGS_BLACKBOX: [UNDRIVEN, UNUSEDSIGNAL, TIMESCALEMOD]
+
+# The flow's pre-synthesis check finds eight logic loops in this design and, with
+# ERROR_ON_SYNTH_CHECKS at its default, quits at stage 8 of 80 -- so `make gds`
+# never reaches a GDS. All eight are the same dead register:
+#
+#   Warning: Async reset value '{ 72'0000...0100000000 \regs_q [7:0] }' is not constant!
+#   created $aldff cell '$procdff$1552' with positive edge clock and positive
+#   level non-const reset.
+#
+#   Warning: found logic loop in module apb_uart_sv:
+#       cell $procdff$1552 ($aldff) source: src/apb_uart_sv.v:229.2-249.6
+#         AD[0] --> Q[0]
+#       wire \regs_q [0] source: src/apb_uart_sv.v:57.13-57.19
+#
+# regs_q is ten bytes of register file. The asynchronous reset at line 229
+# assigns nine of them and leaves out byte 0 -- THR/RBR -- so yosys builds a
+# reset value with regs_q[7:0] inside it, which is not a constant, which makes
+# the register an $aldff whose load input is its own output. Eight bits, eight
+# self-loops.
+#
+# Those eight bits are dead: writes to THR go to fifo_tx_data and reads of RBR
+# come back from fifo_rx_data, so nothing ever writes or reads regs_q[7:0]. The
+# same `check`, run again after opt in the same flow, reports "Found and reported
+# 0 problems", and none of it reaches the netlist.
+#
+# Turning the checker off is blunt -- it would stop reporting a real
+# combinational loop too -- so verify.yml asserts the two reports directly
+# instead: exactly eight problems before opt, all eight naming regs_q, and a
+# clean report after. A new loop moves one of those numbers and CI goes red.
+ERROR_ON_SYNTH_CHECKS: false
