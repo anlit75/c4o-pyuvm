@@ -122,6 +122,14 @@ rtl:
 		echo "//"; \
 		echo "// The Solderpad 0.51 terms in src/vendor/apb_uart_sv/LICENSE cover this file"; \
 		echo "// too: it is the same design, mechanically translated."; \
+		echo "//"; \
+		echo "// The \`timescale is ours, not sv2v's, and not decoration. Without it Icarus"; \
+		echo "// runs this file at a precision of one second, while the PDK cell models a"; \
+		echo "// gate-level run compiles alongside it carry 1ns/1ps -- so \`make cocotb\` and"; \
+		echo "// \`make cocotb-gl\` saw two different meanings of time, and the same clock"; \
+		echo "// period meant 10 ns on the gates and 10 s on the RTL."; \
+		echo ""; \
+		echo "\`timescale 1ns / 1ps"; \
 		echo ""; \
 		$(C4O_SV2V) $(VENDOR_SV); \
 	} > src/apb_uart_sv.v

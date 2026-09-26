@@ -8,6 +8,14 @@
 //
 // The Solderpad 0.51 terms in src/vendor/apb_uart_sv/LICENSE cover this file
 // too: it is the same design, mechanically translated.
+//
+// The `timescale is ours, not sv2v's, and not decoration. Without it Icarus
+// runs this file at a precision of one second, while the PDK cell models a
+// gate-level run compiles alongside it carry 1ns/1ps -- so `make cocotb` and
+// `make cocotb-gl` saw two different meanings of time, and the same clock
+// period meant 10 ns on the gates and 10 s on the RTL.
+
+`timescale 1ns / 1ps
 
 module apb_uart_sv (
 	CLK,
