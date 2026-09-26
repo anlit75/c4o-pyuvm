@@ -60,9 +60,30 @@ FP_SIZING: relative
 # required time is 0.8 x period - 0.25, so a nanosecond of relaxation returns
 # 0.8 ns and the resizer spends the rest on power.
 #
-# At 5 the budget is 0.5 ns, which is a same-die hop, and the arrival time above
-# fits. Not zero: a port with no external delay at all is a different lie.
+# At 5 the budget is 0.5 ns, which is a same-die hop. Measured: 24 violations at
+# -0.75 ns became 1 at -0.03 ns. Not zero, because a port with no external delay
+# at all is a different lie -- and the 30 ps that were left were not this
+# variable's to fix. See GRT_RESIZER_SETUP_SLACK_MARGIN.
 IO_DELAY_CONSTRAINT: 5
+
+# The resizer's last setup pass before detailed routing stops at 0.025 ns of
+# slack by default, and detailed routing then adds parasitics it did not know
+# about. With IO_DELAY_CONSTRAINT at 5 that landed at exactly -0.025 ns on one
+# path -- the margin, spent:
+#
+#   Startpoint: _2086_ (rising edge-triggered flip-flop clocked by CLK)
+#   Endpoint: PRDATA[4] (output port clocked by CLK)
+#                                9.275290   data required time is 9.250000
+#                               -0.025290   slack (VIOLATED)
+#
+# 0.1 ns tells it to overfix by that much instead, which is what the variable is
+# documented for. Routing then has something to spend.
+#
+# The path itself is worth a look if you are here to learn something: 2.83 of its
+# 9.28 ns are three clkdlybuf4s25 cells the flow inserted to fix hold. Almost a
+# third of the critical path is padding added to solve the opposite problem, and
+# hold slack is only +0.10 ns, so there is no room to insert less of it.
+GRT_RESIZER_SETUP_SLACK_MARGIN: 0.1
 
 # Two warnings, waived for two different reasons. Both measured with verilator
 # 5.020 against src/apb_uart_sv.v.
