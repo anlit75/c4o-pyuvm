@@ -1,170 +1,171 @@
-# ChipForAll (C4O)
+# c4o-pyuvm
 
-![CI Status](https://github.com/anlit75/ChipForAll/actions/workflows/verify.yml/badge.svg)
-![release Version](https://img.shields.io/github/v/release/anlit75/ChipForAll?label=version)
-[![License](https://img.shields.io/github/license/anlit75/ChipForAll)](LICENSE)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/anlit75/ChipForAll)
+![CI Status](https://github.com/anlit75/c4o-pyuvm/actions/workflows/verify.yml/badge.svg)
+[![License](https://img.shields.io/github/license/anlit75/c4o-pyuvm)](LICENSE)
 
 *[繁體中文](README.zh-TW.md)*
 
-**A verification and CI starter kit for open-source silicon.** Simulate your RTL, drive it from Python, simulate the gates it synthesises into, and read the signoff numbers — then hand the physical flow to LibreLane. One `make` command each, nothing to install.
+**A worked pyuvm example on somebody else's UART, taken all the way to a GDS.** A
+pyuvm environment with an APB agent, a scoreboard and a generated register model,
+run twice — once against the RTL and once against the 2710 gates it synthesises
+into — plus every test proved against the bug it is there to catch.
 
-## ✨ Features
+Not a template to put your own design in. [ChipForAll](https://github.com/anlit75/ChipForAll)
+is that, and this repository was made from it. This one is the example: a specific
+design, verified, with the reasoning left in.
 
-*   **🧪 Testbenches that can actually fail**: `make sim` for Verilog, `make cocotb` for Python. Both exit non-zero when they should — a test that passes on a broken design is worse than no test.
-*   **🔬 Gate-level simulation**: `make gatesim` re-runs your tests against the netlist synthesis actually produced. Latch inference and reset handling sit between your RTL and those gates, and none of it is visible from the RTL.
-*   **📊 Signoff you can read**: `make report` pulls the handful of numbers that matter — area, timing, power, DRC/LVS/antenna — out of a 300-key `metrics.json` nobody opens.
-*   **✅ CI that runs all of it**: a GitHub Actions workflow that lints, simulates, synthesises, builds the GDS and re-simulates the gates, on every push.
-*   **🐳 Nothing to install**: Docker, or a Dev Container / Codespace. `make gds` works in all three.
+## What is different about it
 
-### What this is not
+**The same tests run against the gates.** Not a second testbench written for the
+netlist — the same Python, the same scoreboard, the same register model:
 
-The physical flow — RTL to GDSII — is [LibreLane](https://github.com/librelane/librelane)'s, and `make gds` is a thin wrapper around it. If all you want is a layout, LibreLane runs standalone with `--dockerized` and you do not need this repo.
-
-What LibreLane does not cover is simulation and verification. That is what this starter kit adds, plus the CI and the Dev Container to run it in.
-
-## 🚀 Quick Start
-
-### Prerequisites
-*   Docker (Desktop or Engine)
-*   Make
-*   Git
-
-*… or none of the above: open it in a GitHub Codespace and everything is already there.*
-
-### 1. Make your own copy
-
-This repository is a **GitHub template**. Press **Use this template → Create a new repository**, then clone your copy:
-
-```bash
-git clone https://github.com/<you>/<your-repo>.git
-cd <your-repo>
+```
+                        RTL              gates
+reset_values          190.00 ns        190.00 ns
+register_readback     200.00 ns        200.00 ns
+idle_status           110.00 ns        110.00 ns
+loopback              800.00 ns        800.00 ns
+random_bytes        11630.00 ns      11630.00 ns
+burst                8600.00 ns       8600.00 ns
+                    ---------        ---------
+TESTS=6 PASS=6      21530.01 ns      21530.01 ns
+                       0.53 s           1.34 s of wall time
 ```
 
-### 2. Run the full flow
+Identical simulated time on both. That only works because nothing in `test/`
+reaches inside the design: every internal name is gone from a netlist, so a
+monitor that peeked at `dut.regs_q` would pass on the RTL and die on the gates.
+`make cocotb-gl` is where you find out.
 
-```bash
-make gds
-```
+**Every test was run against the bug it defends.** Not "the tests pass" — each one
+was checked by breaking the design and watching that test, and only that test,
+fail. The tables are in [the guide](docs/guide.md#proving-a-test-can-fail), and
+one of them is the reason the register model exists at all: an IER write
+redirected to the wrong address is invisible to all six data-path checks and
+caught by the mirror.
 
-*The first run installs the Sky130 PDK (~3GB) and takes a few minutes: synthesis, place & route, then the layout.*
+**The DUT is somebody else's, and its bugs stay in.**
+[pulp-platform/apb_uart_sv](https://github.com/pulp-platform/apb_uart_sv),
+vendored unmodified at `dfad6e04d19cc9481d3cd2750b45b970dc61271b` under Solderpad
+0.51. Verifying a design you may not edit is a different exercise from verifying
+one you wrote, and it is the one a DV engineer is paid for. Three findings are
+documented rather than patched:
 
-### 3. Make it your design
-
-The example is a blinky — a clock divider. To replace it with your own, four things have to agree, and nothing else does:
-
-| Change | Where |
+| finding | where it is written down |
 |---|---|
-| Your RTL | `src/`, listed under `VERILOG_FILES` in `config.yaml` |
-| `DESIGN_NAME` | `config.yaml` — must match your top module's name |
-| Your testbenches | `test/`, under `"//TEST_FILES"` and `"//COCOTB_TESTS"` |
-| The gate-level one | `test/gate/`, under `"//GATE_TESTS"` |
+| an inferred latch on `fifo_tx_data` — 8 `dlxtn` cells in the layout | `config.yaml`, next to the lint waiver |
+| `cfg_stop_bits_i` commented out on the TX instance while RX honours `LCR[2]` | `regs/apb_uart.rdl`, on the `STB` field |
+| 8 dead self-looping bits in the register file, which stopped the physical flow | `config.yaml`, next to `ERROR_ON_SYNTH_CHECKS` |
 
-Nothing else names the design: the `Makefile` and the CI workflow both read `DESIGN_NAME` from `config.yaml`.
+**The register map is one file.** `regs/apb_uart.rdl` in SystemRDL; `make ral`
+turns it into the pyuvm model, and CI regenerates and diffs so the two cannot
+drift. Its header is mostly about the four things SystemRDL *cannot* say about a
+1980s peripheral — which is the part worth reading.
 
-**The last two rows are optional.** Delete `"//COCOTB_TESTS"` or `"//GATE_TESTS"` from `config.yaml` and CI skips that kind of test instead of failing. Keep the key and point it at nothing and CI fails — correctly, since you asked for tests that are not there.
+## Quick start
 
-Get the first row wrong and you hear about it immediately, not three minutes into `make gds`:
-
-```console
-[ERROR] DESIGN_NAME is 'my_cpu', but no module by that name is declared in
-        VERILOG_FILES. Declared there: blinky.
+```bash
+git clone https://github.com/anlit75/c4o-pyuvm.git
+cd c4o-pyuvm
+make all          # lint, Verilog sim, six pyuvm tests, synthesis -- seconds
+make gds          # the physical flow: ~5 minutes, and ~3GB of PDK the first time
+make report       # what it measured
+make cocotb-gl    # the same six tests, on the gates make gds just produced
 ```
 
-## 📖 Commands
+Docker (Desktop or Engine), Make and Git — or none of them: open it in a GitHub
+Codespace and everything is already there.
+
+## What it measures
+
+`make report` after `make gds`:
+
+```
+  apb_uart_sv
+
+  die              236.605 x 247.325 um  (58518.3 um^2)
+  utilization      54.2%
+  standard cells   2710
+  setup slack      +0.92 ns  (0 violations)
+  hold slack       +0.11 ns  (0 violations)
+  power            4.095 mW
+  signoff          clean  (Magic DRC, KLayout DRC, LVS, antenna, XOR)
+  lint warnings    8
+  layout           runs/apb_uart_sv_run/final/render/apb_uart_sv.png
+```
+
+90.9 MHz, not 100, and that took three measured rounds to arrive at rather than
+one guess. [Why](docs/guide.md#closing-timing-took-three-wrong-answers) is in the
+guide: the sky130 default reserves a fifth of every clock period as external
+delay on the ports, which is right for a chip with pads and wrong for a block, and
+which makes the clock period nearly useless as a lever until you notice.
+
+CI gates it. `setup slack` or `hold slack` reporting anything but `(0 violations)`
+turns the build red — because LibreLane reports timing violations as a warning,
+and this repository went green twice on a design that missed its own clock before
+that step existed.
+
+## Commands
 
 | Command | Description | Output |
 |---|---|---|
 | `make all` | `lint`, `sim`, `cocotb` and `synth` — everything that runs in seconds. | `Terminal` |
-| `make lint` | Checks your Verilog with Verilator. | `Terminal` |
-| `make sim` | Runs the Verilog testbenches with Icarus Verilog. | `build/wave.vcd` |
-| `make cocotb` | Runs the Python (cocotb) testbenches. | `build/cocotb-results.xml` |
+| `make lint` | Checks the generated Verilog with Verilator. | `Terminal` |
+| `make sim` | The Verilog smoke test with Icarus Verilog. | `build/tb_apb_uart.vcd` |
+| `make cocotb` | The six pyuvm tests against the RTL. | `build/cocotb-results.xml` |
+| `make cocotb-gl` | The same six against the netlist. Needs `make gds` first. | `build/cocotb-gl-results.xml` |
+| `make rtl` | Regenerates `src/apb_uart_sv.v` from the vendored SystemVerilog. | `src/apb_uart_sv.v` |
+| `make ral` | Regenerates `test/uart_ral.py` from `regs/apb_uart.rdl`. | `test/uart_ral.py` |
 | `make synth` | Synthesises RTL into gates with Yosys. | `build/synthesis.json` |
 | `make schematic` | Draws the circuit as an SVG you can open anywhere. | `build/schematic.svg` |
-| `make gds` | Builds the physical layout with LibreLane (~3 min). | `build/<DESIGN_NAME>.gds` |
-| `make gatesim` | Re-runs simulation on the synthesised netlist. Needs `make gds` first. | `Terminal` |
+| `make gds` | Builds the physical layout with LibreLane (~5 min). | `build/apb_uart_sv.gds` |
 | `make report` | Area, timing, power and signoff from the last `make gds`. | `Terminal` |
 | `make shell` | A bash shell inside the c4o-core container. | — |
-| `make clean` | Removes `build/`. Keeps `runs/`, which `report` and `gatesim` read. | — |
+| `make gatesim` | The Verilog gate-level testbench. Unused here — `cocotb-gl` covers it. | `Terminal` |
+| `make clean` | Removes `build/`. Keeps `runs/`, which `report` and `cocotb-gl` read. | — |
 | `make distclean` | Removes `build/` and `runs/`. | — |
 
-`make help` lists them in the terminal.
+`make help` lists them in the terminal. `make cocotb SEED=<n>` replays a random
+failure — the payloads are logged, so a red CI run tells you both the seed and the
+bytes.
 
-## 📊 Reading the result
-
-`make gds` ends by printing what the flow measured, so you do not have to go looking for it:
-
-```
-  blinky
-
-  die              69.485 x 80.205 um  (5573.04 um^2)
-  utilization      57.1%
-  standard cells   198
-  setup slack      +4.70 ns  (0 violations)
-  hold slack       +0.11 ns  (0 violations)
-  power            0.290 mW
-  signoff          clean  (Magic DRC, KLayout DRC, LVS, antenna, XOR)
-  lint warnings    0
-  layout           runs/blinky_run/final/render/blinky.png
-```
-
-**`signoff`** says the thing nothing else says: your layout passes the manufacturability checks. LibreLane errors on every one of them by default, so a run that reached this line has already passed them — `clean` states it, and names which checks it saw. When something is wrong it names that instead: `2 Magic DRC, 1 LVS`.
-
-**`layout`** is the PNG the flow drew of your chip. Open it.
-
-**Positive slack** means the design meets the clock in `config.yaml`. Negative means it does not, and the flow does not stop for it — so a run can finish and still be telling you it missed. [What to do about that](docs/guide.md#when-slack-is-negative) is in the guide.
-
-`make report` prints all of it again without re-running anything.
-
-## 📚 Next steps
-
-The [guide](docs/guide.md) covers what comes after the first run:
-
-*   [Writing a testbench for your own design](docs/guide.md#writing-a-testbench-for-your-own-design) — the smallest one that can actually fail
-*   [Looking at the waveform](docs/guide.md#when-a-test-fails-look-at-the-waveform) when a test goes red
-*   [Python testbenches](docs/guide.md#writing-testbenches-in-python) with cocotb, [random stimulus against a reference model](docs/guide.md#random-stimulus-and-a-reference-model), and [gate-level simulation](docs/guide.md#simulating-the-gates-not-just-the-rtl)
-*   [Iterating](docs/guide.md#iterating-without-re-running-the-whole-flow) without re-running the whole flow, and [seeing the circuit](docs/guide.md#seeing-the-circuit)
-*   [Working inside the container](docs/guide.md#working-inside-the-container), and the [full configuration reference](docs/guide.md#configuration-reference)
-
-## 📂 Project Structure
+## Project structure
 
 ```text
 .
-├── .devcontainer/     # 🐳 VS Code Dev Container definition
-├── config.yaml        # ⚙️ Design name, clock, floorplan
+├── config.yaml        # ⚙️ Design name, clock, constraints -- with the reasons
 ├── Makefile           # 🎮 The command center
-├── docs/              # 📚 Everything after the first run
-├── src/               # ✍️ Your Verilog source code
-│   └── blinky.v
-├── test/              # 🧪 Your testbenches
-│   ├── tb_blinky.v              # RTL simulation (make sim)
-│   ├── test_blinky_cocotb.py    # Python testbenches (make cocotb)
-│   ├── test_blinky_random.py    # Random stimulus vs a reference model
-│   └── gate/                    # Gate-level simulation (make gatesim)
-│       └── tb_blinky_gl.v
-└── build/             # 📦 Generated artifacts (GDS, logs, netlists)
+├── regs/
+│   └── apb_uart.rdl   # 📋 The register map, and what SystemRDL cannot say
+├── src/
+│   ├── apb_uart_sv.v  # 🤖 GENERATED by make rtl -- do not edit
+│   └── vendor/        # 📦 Somebody else's SystemVerilog, unmodified
+├── test/
+│   ├── apb_agent.py   # 🚌 APB3 driver, monitor, agent, register adapter
+│   ├── uart_env.py    # 🏗️ Environment, scoreboard, and the test base class
+│   ├── uart_ral.py    # 🤖 GENERATED by make ral -- do not edit
+│   ├── test_uart.py   # 🧪 The data path, over the DUT's own loopback
+│   ├── test_ral.py    # 🧪 The registers, through the model
+│   └── tb_apb_uart.v  # 🧪 The Verilog smoke test (make sim)
+└── docs/guide.md      # 📚 How it works, and what went wrong on the way
 ```
 
-## 📝 Configuration
+Two files in there are generated and committed: `src/apb_uart_sv.v` and
+`test/uart_ral.py`. Committing generated code means a fresh clone can run
+everything, and it means the pair can drift — so CI regenerates
+`test/uart_ral.py` and diffs it.
 
-`config.yaml` is a [LibreLane](https://github.com/librelane/librelane) configuration file — the same file drives simulation and the physical design flow. These are the keys you normally touch:
+## Next steps
 
-```yaml
-DESIGN_NAME: my_design
+The [guide](docs/guide.md) is the part with the reasoning in it:
 
-VERILOG_FILES:
-  - dir::src/my_design.v
-
-# Simulation only. LibreLane ignores keys starting with '//'.
-"//TEST_FILES":
-  - dir::test/*.v
-
-CLOCK_PORT: clk
-CLOCK_PERIOD: 10.0
-```
-
-The rest (`PDK`, `FP_SIZING`, `FP_CORE_UTIL`, …) configures the physical design flow; leave it alone until you need it. The die is not something you have to size — `FP_SIZING: relative` grows it to fit your design. The [configuration reference](docs/guide.md#configuration-reference) has the details.
+*   [The environment](docs/guide.md#the-environment) — agent, scoreboard, and why the scoreboard never looks at the serial line
+*   [Proving a test can fail](docs/guide.md#proving-a-test-can-fail) — the mutation tables, and which test each one needed
+*   [The register model](docs/guide.md#the-register-model) — SystemRDL's four limits, and the four things pyuvm needed that PeakRDL does not provide
+*   [Running on the gates](docs/guide.md#running-on-the-gates) — what it caught, starting with a bug in the testbench's idea of time
+*   [Closing timing took three wrong answers](docs/guide.md#closing-timing-took-three-wrong-answers) — including two that were measured and discarded
 
 ---
 
-Powered by the **[c4o-core](https://github.com/anlit75/c4o-core)** engine.
+Powered by the **[c4o-core](https://github.com/anlit75/c4o-core)** engine, from the
+**[ChipForAll](https://github.com/anlit75/ChipForAll)** template.
