@@ -167,8 +167,7 @@ time 是
 
 ## 不重跑整條流程
 
-第一次 `make gds` 之後你會改的東西大多不需要重做合成 —— `FP_CORE_UTIL`、
-`CLOCK_PERIOD`、floorplan：
+floorplan 相關的參數 —— `FP_CORE_UTIL`、die 的大小、擺放 —— 不需要重做合成：
 
 ```bash
 make gds LIBRELANE_ARGS="--last-run --from floorplan"
@@ -176,6 +175,11 @@ make gds LIBRELANE_ARGS="--last-run --from floorplan"
 
 它會從 `runs/` 讀上一次的執行結果，這也是 `make clean` 不動那個目錄、而 `make distclean`
 才會刪掉它的原因。
+
+**`CLOCK_PERIOD` 不在裡面**，而這件事在這個 repo 特別重要，因為它就是這個設計時序的關
+鍵。時脈是合成的輸入，合成會依它挑元件尺寸、插 buffer，所以從 floorplan 恢復的話，你量
+到的是「**舊**週期合成出來的閘，在新週期下的 timing」。[時序與 constraint](#時序與-constraint)
+裡那個 90.9 MHz 就是為了這個理由、用乾淨重跑量出來的。
 
 ## 看電路
 

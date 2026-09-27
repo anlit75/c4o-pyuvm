@@ -183,8 +183,8 @@ directly instead, so a *new* loop still fails the build.
 
 ## Iterating without re-running the whole flow
 
-Most of what you change after the first `make gds` — `FP_CORE_UTIL`,
-`CLOCK_PERIOD`, the floorplan — does not need synthesis redone:
+Floorplan parameters — `FP_CORE_UTIL`, the die, the placement — do not need
+synthesis redone:
 
 ```bash
 make gds LIBRELANE_ARGS="--last-run --from floorplan"
@@ -192,6 +192,12 @@ make gds LIBRELANE_ARGS="--last-run --from floorplan"
 
 That reads the previous run out of `runs/`, which is why `make clean` leaves that
 directory alone and `make distclean` is the one that removes it.
+
+**`CLOCK_PERIOD` is not one of them**, which matters here because it is the key
+this design's timing turns on. The clock is an input to synthesis, which sizes
+cells and inserts buffers against it, so resuming from floorplan measures the
+gates the *old* period produced under the new one. The 90.9 MHz in
+[Constraints](#constraints) came from clean runs for that reason.
 
 ## Seeing the circuit
 
