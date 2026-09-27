@@ -64,6 +64,13 @@ Six tests, each covering something the others cannot.
 `register_readback` is why the register model exists. The rest would all pass a
 design that wrote IER's value into MCR.
 
+**That table is this suite's coverage argument, and it is the only one.** There is
+no functional or code coverage here: the generated register model is built with
+`UVM_NO_COVERAGE`, and nothing collects coverpoints. Six tests on a design this
+size can be argued about one at a time, which is what the table does — and what
+an interviewer means by coverage-driven verification is the machinery that takes
+over when a table stops being possible. Worth knowing which one you have.
+
 ### Checking a test can still fail
 
 A test that has never failed is a test nobody has checked. Break the design, run
