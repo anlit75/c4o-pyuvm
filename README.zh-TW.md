@@ -13,6 +13,12 @@
 這不是拿來放你自己設計的模板。[ChipForAll](https://github.com/anlit75/ChipForAll)
 才是，這個 repo 是從它建出來的。
 
+**這是給誰看的。** 給已經在驗硬體、或正在學怎麼驗的人。它假設你看得懂 Verilog、知道
+合成和 netlist 是什麼、也碰過某種 bus 協定——指南直接討論 APB 的 phase 和 16550 的暫
+存器圖，兩個都不會先解釋。如果這些對你是新的，先從
+[ChipForAll](https://github.com/anlit75/ChipForAll) 開始：它用一個小到可以一眼看完的
+設計教完整條流程，而這個 repo 之後還會在這裡。
+
 ## 它跟別人不一樣的地方
 
 **Gate-level 用的是同一份測試。** 不是另寫一份給 netlist 的 testbench —— 同一份

@@ -15,6 +15,14 @@ This is not a template to put your own design in.
 [ChipForAll](https://github.com/anlit75/ChipForAll) is that, and this repository
 was made from it.
 
+**Who it is for.** Somebody who verifies hardware, or is learning to. It assumes
+you already read Verilog, know what synthesis and a netlist are, and have met a
+bus protocol before — the guide discusses APB phases and a 16550's register map
+without explaining either. If those are new, start with
+[ChipForAll](https://github.com/anlit75/ChipForAll): it teaches the flow on a
+design small enough to hold in your head, and this repository will still be here
+afterwards.
+
 ## What is unusual about it
 
 **The gate-level run uses the same tests.** Not a second testbench written for the
