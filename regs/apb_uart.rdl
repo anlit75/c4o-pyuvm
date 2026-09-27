@@ -1,42 +1,35 @@
 // The register map of src/vendor/apb_uart_sv/, as that design actually decodes
-// it -- not as the 16550 datasheet describes it.
+// it -- not as the 16550 datasheet describes it. Fields, reset values and access
+// come from the RTL's own decode, which is what makes a reset check worth
+// running.
 //
-// `make ral` turns this into test/uart_ral.py with `peakrdl pyuvm`, so the RAL
-// the tests use and this description cannot drift. Fields, reset values and
-// access are all taken from the RTL's own decode (apb_uart_sv.v, the two always
-// @(*) blocks around lines 158 and 193), and every reset value here is the one
-// the RTL assigns, which is what makes a reset check worth running.
+// `make ral` turns this into test/uart_ral.py with `peakrdl pyuvm`, so the map
+// and the model the tests use cannot drift apart.
 //
-// Four things in this map cannot be written down in SystemRDL, and they are the
-// interesting part:
+// Four things about this design cannot be written down in SystemRDL:
 //
 //   1. THR/RBR at 0x0 is not a register. A write pushes into the TX FIFO and a
-//      read pops the RX FIFO, so there is no storage to mirror -- write 0xA5 and
-//      the next read returns whatever the serial line delivered, which may be a
-//      different byte or none. It is left out. The loopback tests in
-//      test/test_uart.py verify that path instead, which is the right tool: UVM
-//      has uvm_reg_fifo for FIFO ports, and PeakRDL does not generate it.
+//      read pops the RX FIFO, so there is no storage to mirror. It is left out;
+//      the loopback tests in test/test_uart.py verify that path instead. UVM has
+//      uvm_reg_fifo for FIFO ports, and PeakRDL does not generate it.
 //
-//   2. FCR at 0x2 is write-only and shares its address with IIR, which is
-//      read-only, and the two have unrelated hardware. SystemRDL's `alias` is
-//      the mechanism for two views of one address, but it is a view of the same
-//      storage: peakrdl refuses
+//   2. FCR at 0x2 is write-only and shares its address with the read-only IIR,
+//      and the two are unrelated hardware. SystemRDL's `alias` is the mechanism
+//      for two views of one address, but it is a view of the same storage:
 //
 //        error: Alias register 'FCR' contains field 'TX_CLR' that does not
 //        exist in the primary register.
 //
-//      So IIR is described and FCR is not. The tests write FCR through the APB
-//      agent directly.
+//      So IIR is described and FCR is written through the APB agent directly.
 //
-//   3. The divisor latches DLL and DLM replace THR and IER entirely while
-//      LCR[7] (DLAB) is set. That is a dynamic bank select, and SystemRDL has no
-//      way to say it -- a register's address does not depend on another
-//      register's contents. Also driven through the agent.
+//   3. DLL and DLM replace THR and IER entirely while LCR[7] (DLAB) is set. A
+//      register's address cannot depend on another register's contents. Also
+//      driven through the agent.
 //
 //   4. MCR (0x4), MSR (0x6) and SCR (0x7) are absent on purpose. The RTL resets
 //      storage for them and then never decodes a read or a write, so they read
-//      back as 0 from the decode's default branch. Describing them as registers
-//      would make the RAL predict values the design cannot return.
+//      back as 0. Describing them would make the model predict values the design
+//      cannot return.
 
 addrmap apb_uart {
     name = "apb_uart_sv register map";

@@ -1,24 +1,22 @@
 # c4o-pyuvm design configuration
 #
-# This is a LibreLane configuration file. The same file drives simulation and
-# linting through c4o-core and the physical design flow through LibreLane, so
-# the variable names are LibreLane's.
-#
-# 'dir::' marks a path as relative to this directory.
+# A LibreLane configuration file. The same file drives linting and simulation
+# through c4o-core and the physical flow through LibreLane, so the variable
+# names are LibreLane's. Keys starting with '//' are c4o-core's; LibreLane
+# ignores them. 'dir::' marks a path as relative to this directory.
 
 # ============ what you normally change ============
 
 DESIGN_NAME: apb_uart_sv
 
 # The generated Verilog, not the SystemVerilog it came from. `make rtl` writes
-# it; src/vendor/apb_uart_sv/README.md says why it is committed. A glob does
-# not work here: LibreLane validates each entry as a literal path.
+# it; src/vendor/apb_uart_sv/README.md says why it is committed. A glob does not
+# work here: LibreLane validates each entry as a literal path.
 VERILOG_FILES:
   - dir::src/apb_uart_sv.v
 
-# Simulation only. LibreLane has no testbench variable -- simulation sits
-# outside an RTL-to-GDSII flow -- and it ignores any key starting with '//',
-# which is what keeps this file valid for both tools.
+# Simulation only -- LibreLane has no testbench variable, since simulation sits
+# outside an RTL-to-GDSII flow.
 "//TEST_FILES":
   - dir::test/*.v
 
@@ -30,24 +28,15 @@ VERILOG_FILES:
 
 CLOCK_PORT: CLK
 
-# 90.9 MHz, and it took three measurements to earn that number rather than 100.
-#
-# The path from uart_rx_fifo_i's read pointer through the APB read mux to
-# PRDATA[4] arrives at 9.275 ns, and 2.83 ns of that are three clkdlybuf4s25
-# cells the flow inserted to fix hold. Required time is
+# 90.9 MHz, not 100. Required time is
 #
 #   period - 0.25 (clock uncertainty) - IO_DELAY_CONSTRAINT x period
 #
-# so at 100 MHz with any honest port budget it lands under 9.275 and the design
-# misses. 100 MHz is available only by claiming zero external delay on the ports,
-# which says the block downstream latches PRDATA with no setup time of its own.
-# 11.0 gives 10.20 ns of required time instead, and keeps a 0.55 ns port budget
-# that is a real same-die hop.
-#
-# Relaxing the period was tried first, at the wrong time, and did almost nothing:
-# with IO_DELAY_CONSTRAINT still at 20, going 10.0 -> 11.0 moved setup slack from
-# -0.75 ns to -0.70 ns, because a fifth of every added nanosecond went straight
-# back into the I/O budget. It works now only because that budget is 5.
+# and the path from uart_rx_fifo_i's read pointer through the APB read mux to
+# PRDATA arrives at 9.28 ns, of which 2.83 ns are delay cells the flow inserted
+# to fix hold. Hold slack is +0.10 ns, so it cannot insert fewer. 100 MHz is
+# reachable only by claiming zero external delay on the ports -- which says
+# whatever latches PRDATA needs no setup time of its own.
 CLOCK_PERIOD: 11.0
 
 # ============ keep these unless you know what you are doing ============
@@ -58,52 +47,17 @@ STD_CELL_LIBRARY: sky130_fd_sc_hd
 FP_CORE_UTIL: 40
 FP_SIZING: relative
 
-# The sky130 default is 20, meaning a fifth of every clock period is reserved as
-# external delay on the ports -- 2 ns out of 10. That default is for a design
-# whose pins drive a package and a board. This one is a block: PRDATA goes to an
-# APB master on the same die.
+# The sky130 default is 20: a fifth of every clock period reserved as external
+# delay on the ports. That is right for a design whose pins drive a package and
+# a board, and wrong for a block whose PRDATA goes to an APB master on the same
+# die. 5 leaves a 0.55 ns port budget, which is a real same-die hop.
 #
-# Left at 20, the flow does not close 100 MHz, and every violating path ends at a
-# port. From the report CI now prints:
-#
-#   Startpoint: uart_rx_fifo_i.pointer_out[1] (rising edge-triggered flip-flop)
-#   Endpoint: PRDATA[4] (out)
-#                                8.502929   data arrival time
-#                  10.000000    10.000000   clock CLK (rise edge)
-#                  -0.250000     9.750000   clock uncertainty
-#                  -2.000000     7.750000   output external delay
-#                                7.750000   data required time
-#                               -0.752928   slack (VIOLATED)
-#
-# The design needs 8.50 ns and is given 7.75. Two of the missing nanoseconds are
-# a board that does not exist -- and because the budget is a percentage, it also
-# made the period useless as a lever: required time was 0.8 x period - 0.25, so
-# every added nanosecond gave back only 0.8.
-#
-# At 5 the budget is 0.5 ns at 10 ns of period, which is a same-die hop. Measured:
-# 24 violations at -0.75 ns became 1 at -0.03 ns. Not zero, because a port with no
-# external delay at all is a different lie -- it would say whatever latches PRDATA
-# needs no setup time.
+# It is a percentage, which also makes the clock period a poor lever: at 20,
+# each added nanosecond of period gives back only 0.8 ns.
 IO_DELAY_CONSTRAINT: 5
 
-# That last path is the one CLOCK_PERIOD above is set for:
-#
-#   Startpoint: _2086_ (rising edge-triggered flip-flop clocked by CLK)
-#   Endpoint: PRDATA[4] (output port clocked by CLK)
-#                                9.275290   data arrival time
-#                                9.250000   data required time
-#                               -0.025290   slack (VIOLATED)
-#
-# 2.83 of those 9.28 ns are three clkdlybuf4s25 cells the flow inserted to fix
-# hold -- almost a third of the setup-critical path is padding added to solve the
-# opposite problem, and hold slack is only +0.10 ns, so there is no room to insert
-# less of it. Raising GRT_RESIZER_SETUP_SLACK_MARGIN from its default 0.025 to 0.1
-# was tried and changed nothing: arrival, cell count and power came back identical
-# to the picosecond, so the resizer is not stopping early, it cannot improve this
-# path at all. 25 ps that only the period could give back.
-
-# Two warnings, waived for two different reasons. Both measured with verilator
-# 5.020 against src/apb_uart_sv.v.
+# Two Verilator warnings, waived for two different reasons, named one code at a
+# time so that a third warning still stops the build.
 #
 # LATCH is the DUT's, and not ours to fix:
 #
@@ -111,57 +65,41 @@ IO_DELAY_CONSTRAINT: 5
 #                   (not all control paths of combinational always assign a
 #                   value)
 #
-# It is a real finding in somebody else's 2017 RTL -- an always_comb that does
-# not assign fifo_tx_data on every path -- and it survives the translation to
-# Verilog, so it is the design and not sv2v. Verifying a design you may not edit
-# is the exercise this repository is about, so it is waived with its reason
-# rather than patched out.
+# An always_comb that does not assign fifo_tx_data on every path. It survives
+# the translation to Verilog, so it is the design and not sv2v. Verifying a
+# design you may not edit is what this repository is about, so it is waived with
+# its reason rather than patched out.
 #
-# WIDTHEXPAND is sv2v's:
-#
-#   %Warning-WIDTHEXPAND: Operator EQ expects 32 bits on the LHS, but LHS's
-#                         VARREF 'pointer_in' generates 4 bits.
-#
-# sv2v renders `$unsigned(BUFFER_DEPTH - 1)` as a 32-bit constant, and the
-# comparison against a 4-bit pointer is what verilator is objecting to. The
+# WIDTHEXPAND is sv2v's: it renders `$unsigned(BUFFER_DEPTH - 1)` as a 32-bit
+# constant, and Verilator objects to comparing that against a 4-bit pointer. The
 # comparison is correct; the widths are the translator's.
-#
-# Named one code at a time on purpose: a third warning appearing still stops the
-# build rather than hiding behind a blanket waiver.
 LINTER_DISABLE_WARNINGS: [LATCH, WIDTHEXPAND]
 
 # The blackbox stubs LibreLane generates for the PDK cells carry no timescale,
-# so TIMESCALEMOD fires once per cell -- none of them from the design. Same
-# reason UNDRIVEN and UNUSEDSIGNAL are in the default list; they have to be
-# repeated here because this overrides rather than appends.
+# so TIMESCALEMOD fires once per cell -- none of them from the design. UNDRIVEN
+# and UNUSEDSIGNAL are in c4o-core's default list for the same kind of reason,
+# and have to be repeated because this key overrides rather than appends.
 LINTER_DISABLE_WARNINGS_BLACKBOX: [UNDRIVEN, UNUSEDSIGNAL, TIMESCALEMOD]
 
-# The flow's pre-synthesis check finds eight logic loops in this design and, with
-# ERROR_ON_SYNTH_CHECKS at its default, quits at stage 8 of 80 -- so `make gds`
-# never reaches a GDS. All eight are the same dead register:
-#
-#   Warning: Async reset value '{ 72'0000...0100000000 \regs_q [7:0] }' is not constant!
-#   created $aldff cell '$procdff$1552' with positive edge clock and positive
-#   level non-const reset.
+# The pre-synthesis check finds eight logic loops in this design and, at the
+# default, quits at stage 8 of 80 -- so `make gds` never reaches a GDS. All
+# eight are the same dead register:
 #
 #   Warning: found logic loop in module apb_uart_sv:
 #       cell $procdff$1552 ($aldff) source: src/apb_uart_sv.v:229.2-249.6
 #         AD[0] --> Q[0]
-#       wire \regs_q [0] source: src/apb_uart_sv.v:57.13-57.19
 #
-# regs_q is ten bytes of register file. The asynchronous reset at line 229
-# assigns nine of them and leaves out byte 0 -- THR/RBR -- so yosys builds a
-# reset value with regs_q[7:0] inside it, which is not a constant, which makes
-# the register an $aldff whose load input is its own output. Eight bits, eight
-# self-loops.
+# regs_q is ten bytes of register file. The asynchronous reset assigns nine of
+# them and leaves out byte 0 -- THR/RBR -- so yosys builds a reset value with
+# regs_q[7:0] inside it, which is not constant, which makes the register an
+# $aldff whose load input is its own output. Eight bits, eight self-loops.
 #
 # Those eight bits are dead: writes to THR go to fifo_tx_data and reads of RBR
-# come back from fifo_rx_data, so nothing ever writes or reads regs_q[7:0]. The
-# same `check`, run again after opt in the same flow, reports "Found and reported
-# 0 problems", and none of it reaches the netlist.
+# come back from fifo_rx_data, so nothing ever touches regs_q[7:0]. The same
+# check after opt reports zero problems, and none of it reaches the netlist.
 #
 # Turning the checker off is blunt -- it would stop reporting a real
-# combinational loop too -- so verify.yml asserts the two reports directly
-# instead: exactly eight problems before opt, all eight naming regs_q, and a
-# clean report after. A new loop moves one of those numbers and CI goes red.
+# combinational loop too -- so verify.yml asserts the two reports directly:
+# exactly eight problems before opt, all eight naming regs_q, and a clean report
+# after. A new loop moves one of those numbers and CI goes red.
 ERROR_ON_SYNTH_CHECKS: false
