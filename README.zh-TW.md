@@ -17,9 +17,11 @@
 合成和 netlist 是什麼、也碰過某種 bus 協定——指南直接討論 APB 的 phase 和 16550 的暫
 存器圖，兩個都不會先解釋。它同時也假設你認得那套詞
 彙——agent、driver、monitor、sequencer、scoreboard、`ConfigDB`、暫存器模型——而且它解
-釋的是**這一個**環境為什麼這樣搭，不是那些層各自存在的理由。如果這些對你是新的，先從
+釋的是**這一個**環境為什麼這樣搭，不是那些層各自存在的理由。這是兩個不同的缺口。如果
+對你來說是 Verilog 和整條流程比較新，先從
 [ChipForAll](https://github.com/anlit75/ChipForAll) 開始：它用一個小到可以一眼看完的
-設計教完整條流程，而這個 repo 之後還會在這裡。
+設計把那些教完，而這個 repo 之後還會在這裡。如果新的是那套詞彙，ChipForAll 補不了——它
+的測試是平的，沒有分層可看——該去的是 pyuvm 自己的文件。
 
 **pyuvm 不是 SystemVerilog UVM**，而如果你在做作品集，這個差別值得講清楚。
 [pyuvm](https://github.com/pyuvm/pyuvm) 是用 Python 實作 UVM 1.2 的類別庫，所以這裡的

@@ -20,11 +20,13 @@ you already read Verilog, know what synthesis and a netlist are, and have met a
 bus protocol before — the guide discusses APB phases and a 16550's register map
 without explaining either. It also assumes the vocabulary — agent, driver,
 monitor, sequencer, scoreboard, `ConfigDB`, register model — and explains why
-*this* environment is built the way it is rather than what the layers are for. If
-those are new, start with
-[ChipForAll](https://github.com/anlit75/ChipForAll): it teaches the flow on a
+*this* environment is built the way it is rather than what the layers are for.
+Those are two separate gaps. If the Verilog and the flow are what is new, start
+with [ChipForAll](https://github.com/anlit75/ChipForAll): it teaches those on a
 design small enough to hold in your head, and this repository will still be here
-afterwards.
+afterwards. If the vocabulary is what is new, ChipForAll will not close it — its
+tests are flat, with no layers to look at — and pyuvm's own documentation is
+where to start.
 
 **pyuvm is not SystemVerilog UVM**, and if you are building a portfolio the
 difference is worth stating plainly. [pyuvm](https://github.com/pyuvm/pyuvm)
