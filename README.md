@@ -18,10 +18,23 @@ was made from it.
 **Who it is for.** Somebody who verifies hardware, or is learning to. It assumes
 you already read Verilog, know what synthesis and a netlist are, and have met a
 bus protocol before — the guide discusses APB phases and a 16550's register map
-without explaining either. If those are new, start with
+without explaining either. It also assumes the vocabulary — agent, driver,
+monitor, sequencer, scoreboard, `ConfigDB`, register model — and explains why
+*this* environment is built the way it is rather than what the layers are for. If
+those are new, start with
 [ChipForAll](https://github.com/anlit75/ChipForAll): it teaches the flow on a
 design small enough to hold in your head, and this repository will still be here
 afterwards.
+
+**pyuvm is not SystemVerilog UVM**, and if you are building a portfolio the
+difference is worth stating plainly. [pyuvm](https://github.com/pyuvm/pyuvm)
+implements UVM 1.2's class library in Python, so the structure here is the real
+thing: the same layers, the same phases, the same objection mechanism, the same
+register layer. What does not carry over is the language — SystemVerilog's
+macros, the factory, virtual interfaces, `fork`/`join`. So "built a pyuvm
+verification environment" is a claim this repository supports; "SystemVerilog UVM
+experience" is not, and an interviewer who asks a second question will find out
+which you meant.
 
 ## What is unusual about it
 
