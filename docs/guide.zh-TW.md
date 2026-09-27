@@ -2,37 +2,35 @@
 
 *[English](guide.md)*
 
-這個 repo 的驗證怎麼運作，以及做到這裡的路上出過什麼錯。[README](../README.zh-TW.md)
-講的是「它是什麼、怎麼跑」；這份講的是「它為什麼長這樣」。
+testbench 怎麼搭的，以及從程式碼看不出來的那些決定。這個 repo 是什麼、怎麼跑，在
+[README](../README.zh-TW.md)。
 
 ## 環境
 
-四個手寫的檔案、623 行、一個想法：只透過 DUT 的 pin 驅動它，別的都不碰。
-
 ```
-test/apb_agent.py   143  ApbTxn、driver、monitor、agent，以及暫存器 adapter
-test/uart_env.py    197  環境、scoreboard、測試基底類別
-test/test_uart.py   137  資料路徑的測試
-test/test_ral.py    146  暫存器的測試
-test/uart_ral.py    150  由 make ral 生成
+test/apb_agent.py   ApbTxn、driver、monitor、agent、暫存器 adapter
+test/uart_env.py    環境、scoreboard、測試基底類別
+test/test_uart.py   資料路徑測試
+test/test_ral.py    暫存器測試
 ```
 
-**driver 不是狀態機。** APB3 只有兩個 phase，而這顆 DUT 無條件把 `PREADY` 拉高
-（`assign PREADY = 1'b1`），所以沒有 backpressure 要模型化：setup、access、在結束
-access phase 的那個邊緣讀 `PRDATA`、放掉 `PSEL`。每次都三個 cycle。monitor 是同一件事
-從另一側看 —— 它等 `PSEL`、`PENABLE`、`PREADY` 同時為 1 的那個 cycle，然後把看到的廣播
-出去。
+**driver 不是狀態機。** APB3 只有兩個 phase，而這顆 DUT 把 `PREADY` 無條件拉高，所以沒
+有 backpressure 要模擬：帶 `PSEL` 驅動位址、拉起 `PENABLE`、在結束 access phase 的那個
+邊緣讀 `PRDATA`、放掉 `PSEL`。每次都是三個 cycle。monitor 盯 `PSEL`、`PENABLE`、
+`PREADY` 同時成立的那個 cycle，然後把看到的廣播出去。
 
-**scoreboard 從不看序列線。** `tx_o` 接回 `rx_i`，所以每個寫進 THR 的位元組都必須照
-順序從 RBR 出來。這一條關係就涵蓋了 APB 解碼、TX FIFO、序列化器、解序列化器和 RX
-FIFO。改成模型化 bit timing 的話，等於拿 DUT 的除頻運算去對照同一套運算的第二份拷貝 ——
-什麼都沒證明，而且除頻一改就壞。
+**scoreboard 檢查 loopback，不檢查位元時序。** `tx_o` 接回 `rx_i`，所以每個寫進 THR 的
+位元組都必須照順序從 RBR 出來。這一條關係就涵蓋了 APB 解碼、兩個 FIFO、序列化和解序列
+化。
 
-它確實得追蹤暫存器的寫入。在 offset `0x0`，寫是 THR、讀是 RBR，但**只在 `LCR[7]` 為 0
-的時候**：DLAB 設起來時同一個位址是除頻鎖存器，跟 FIFO 毫無關係。scoreboard 追那一個
-位元，才知道哪些讀是資料。
+改成模擬序列時序的話，等於是拿 DUT 的除頻運算去對一份自己抄的同樣運算 —— 證明不了什
+麼，而且除頻值一改就壞。
 
-**loopback 是 coroutine，不是一條線。**
+scoreboard 確實會追 `LCR[7]`。位址 `0x0` 上，寫是 THR、讀是 RBR，**但只在那個位元是 0
+的時候**；DLAB 設起來時同一個位址是除頻鎖存器，跟 FIFO 無關。
+
+**loopback 是一個 coroutine。** cocotb 把 DUT 當成 root 來 elaborate，所以沒有一層
+testbench module 可以在裡面把兩個 port 接起來：
 
 ```python
 async def tie_tx_to_rx():
@@ -42,299 +40,201 @@ async def tie_tx_to_rx():
         dut.rx_i.value = dut.tx_o.value
 ```
 
-cocotb 把 DUT 當 root elaborate —— 沒有 testbench module 可以做這個接線 —— 所以由 Python
-做。結果這反而是比較好的答案：它在 netlist 上行為完全一樣，而 Verilog wrapper 在那裡根本
-不存在。
+它是由 `tx_o` 變化觸發，不是由時脈。用時脈同步鏡射會讀到邊緣前的值，於是給序列線加上一
+個 cycle 的延遲 —— RTL 容得下，但帶單位延遲的 netlist 未必，因為一個 bit 只有五個
+cycle 寬。一條線沒有延遲。
 
-它是由 `tx_o` 變化驅動的，不是由時脈驅動，而這是修正而不是初稿。clocked mirror 讀到的是
-`tx_o` 邊緣前的值，等於在序列線上多加一個 cycle 的延遲。RTL 容得下；netlist 用
-`-DUNIT_DELAY` 編、每顆 cell 都要一步，餘裕更少 —— 一個 bit 只有 `DIVISOR + 1` = 5 個
-cycle 寬。
+## 每個測試抓什麼
 
-## 證明一個測試會失敗
+六個測試，每個都抓得到別人抓不到的東西。
 
-一個從來沒失敗過的測試，是一個沒人檢查過的測試。這裡每個測試都對著一個故意弄壞的設計跑
-過，而重點不是它們全都變紅 —— 是**哪些**變紅。
+| 測試 | 只有它抓得到 |
+|---|---|
+| `loopback` | 一個位元組根本走不完一圈 |
+| `random_bytes` | 任何需要超過一個位元組才會顯現的問題 —— 一個沒讓 RX FIFO 前進的讀取，會永遠讀到同一個「正確」的位元組 |
+| `burst` | 任何需要超過一個位元組**同時在路上**的問題 —— 一次送一個永遠不會讓 FIFO 裡有兩筆，所以分不出佇列和暫存器 |
+| `reset_values` | 某個暫存器 reset 出來的值是錯的 |
+| `register_readback` | 一次寫到錯位址的寫入 —— 所有資料路徑測試都看不見，因為 UART 還是傳得好好的 |
+| `idle_status` | 某個狀態位元錯了，但整個位元組看起來還是對的 |
 
-六個對 DUT 的 mutation，每個套上、用 `RANDOM_SEED=4242` 跑、再還原：
+`register_readback` 就是暫存器模型存在的理由。其他測試在一個把 IER 的值寫進 MCR 的設計
+上全都會過。
 
-| mutation | `reset_values` | `register_readback` | `idle_status` | `loopback` | `random_bytes` | `burst` |
-|---|---|---|---|---|---|---|
-| IIR reset 成 `0b0000` | **FAIL** | PASS | PASS | PASS | PASS | PASS |
-| LSR reset 成 `0x00` | PASS | PASS | PASS | PASS | PASS | PASS |
-| LCR 寫入掉最低位 | PASS | **FAIL** | PASS | FAIL | FAIL | FAIL |
-| IER 寫入落到 MCR | PASS | **FAIL** | PASS | PASS | PASS | PASS |
-| `LSR.THRE` 永不拉起 | FAIL | PASS | **FAIL** | PASS | PASS | PASS |
-| `LSR.TEMT` 永不拉起 | FAIL | PASS | **FAIL** | PASS | PASS | PASS |
+### 確認一個測試還會失敗
 
-以及另外五個瞄準資料路徑的：
+一個從沒失敗過的測試，是一個沒人檢查過的測試。把設計弄壞、跑測試、確認你瞄準的那個會
+失敗，而且訊息有用：
 
-| mutation | `loopback` | `random_bytes` | `burst` |
-|---|---|---|---|
-| THR 寫入掉最低位 | FAIL | FAIL | FAIL |
-| `LSR[0]`（data ready）綁 0 | FAIL | FAIL | FAIL |
-| RBR 讀取不 pop RX FIFO | **PASS** | FAIL | FAIL |
-| TX FIFO 只裝一個位元組，不是十六個 | **PASS** | **PASS** | FAIL |
-| monitor 不回報任何 transfer | FAIL | FAIL | FAIL |
+```bash
+# 例如在 src/apb_uart_sv.v 裡讓 THR 的寫入掉一個最低位元
+make cocotb                       # loopback: "sent 0xa5, RBR returned 0xa4"
+git checkout -- src/apb_uart_sv.v
+```
 
-要看的是欄，不是列。每個粗體的 **PASS** 都是一個看不見那個 bug 的測試，也因此正是下一個
-測試存在的理由：
+其中兩件事值得知道：
 
-*   **一個位元組分不出 queue 和 register。** `loopback` 送 `0xA5` 再讀回來；RX FIFO
-    永不 pop 的時候，它讀到的還是那個正確的位元組。`random_bytes` 送二十個，在第二個
-    就失敗。
-*   **一次送一個位元組，永遠不會讓 FIFO 裡同時有兩個。** 只有 `burst`（十六個全寫完才
-    開始讀）看得見深度變成 1。
-*   **值對、位址錯，資料路徑完全看不見。** IER 的寫入被導到 MCR，UART 送出去的東西一點
-    都沒變。mirror 抓到了：`Register 'regs.IER' value read from DUT (0x0) does not
-    match mirrored value (0x5)`。那一列就是「為什麼要有暫存器模型」的論證。
-*   **有一個 mutation 瞄的是 testbench，不是 DUT。** monitor 被靜音時，每個 scoreboard
-    檢查都會在空 queue 上通過 —— 所以測試基底類別改成斷言數量：`the scoreboard matched
-    0 bytes through the loopback, not 1`。
-
-**而且有一個 mutation 活下來。** 把 LSR 的 reset 從 `0x60` 改成 `0x00`，什麼都沒壞，
-因為那個 reset 值從 bus 上觀測不到：`THRE` 和 `TEMT` 是由 `tx_elements` 和 `tx_ready`
-組合邏輯驅動的，`regs_n` 在 reset 後第一個時脈邊緣就把兩者都蓋掉。`ResetValuesTest` 的
-docstring 直接這麼寫，而不是假裝沒事，而 `IdleStatusTest` 改成逐欄位釘住同兩個位元 ——
-這也是第一張表最後兩列有一欄會 FAIL 的原因。
+*   **`reset_values` 對 LSR 比名字聽起來弱。** `THRE` 和 `TEMT` 是組合邏輯驅動的，所以
+    reset 值在第一個時脈邊緣就被蓋掉，從 bus 上觀察不到。改 RTL 裡的那個值不會讓任何測
+    試失敗。那個檢查真正斷言的是「一個閒置的傳送器會說自己是空的」—— 這也是
+    `idle_status` 要逐欄位釘住那些位元的原因。
+*   **有一個檢查是瞄準 testbench 自己的。** 測試基底類別會斷言 scoreboard 比對到的位元
+    組數目正好等於送出去的數目，所以把 monitor 弄啞會大聲失敗，而不是讓每次比對都在空
+    佇列上通過。
 
 ## 暫存器模型
 
-`regs/apb_uart.rdl` 是用 SystemRDL 寫的暫存器圖。`make ral` 對它跑 `peakrdl pyuvm`，而
-CI 會重新生成並 diff，所以測試驅動的模型和暫存器圖的描述不可能漂移。
+`regs/apb_uart.rdl` 是暫存器圖。`make ral` 對它跑 `peakrdl pyuvm`，CI 會重新生成並
+diff。
 
-`.rdl` 描述了 IER、IIR、LCR、LSR。它的檔頭大部分在講它**沒辦法**描述的東西，而那正是
-「把暫存器描述語言拿去對付 1980 年代周邊」有意思的地方：
+這份圖描述 IER、IIR、LCR、LSR。這顆 DUT 有四件事沒辦法用 SystemRDL 表達，所以其餘部分
+是直接透過 agent 驅動的：
 
-1.  **`0x0` 的 THR/RBR 不是暫存器。** 寫進 TX FIFO、讀出 RX FIFO。沒有 storage 可以
-    mirror —— 寫 `0xA5`，下一次讀回來的是序列線送到的東西。UVM 有 `uvm_reg_fifo` 處理
-    這種情況；PeakRDL 不生成它。
-2.  **`0x2` 的 FCR 唯寫，而且和唯讀的 IIR 共用位址。** SystemRDL 的 `alias` 就是給
-    「一個位址兩個視角」用的機制 —— 但它是*同一份 storage* 的視角，而這兩個是無關的
-    硬體：
-
-    ```
-    error: Alias register 'FCR' contains field 'TX_CLR' that does not exist in
-    the primary register.
-    ```
+1.  **`0x0` 上的 THR/RBR 不是暫存器。** 寫是推進 TX FIFO、讀是從 RX FIFO 彈出，沒有儲
+    存可以鏡射。UVM 有 `uvm_reg_fifo` 處理這件事，PeakRDL 不生成它。
+2.  **`0x2` 的 FCR 是唯寫，而且跟唯讀的 IIR 共用位址。** `alias` 是 SystemRDL 給「一個
+    位址兩種視角」的機制，但它是**同一份儲存**的視角，而這兩個是不相干的硬體。
 3.  **`LCR[7]` 設起來時，DLL 和 DLM 取代 THR 和 IER。** 一個暫存器的位址不能取決於另一
     個暫存器的內容。
-4.  **MCR、MSR、SCR 是故意不寫的。** RTL reset 了它們的 storage，然後永遠不解碼讀或寫，
-    所以它們從 default 分支讀回 0。把它們描述成暫存器會讓模型去預測設計根本回不出來的值。
+4.  **MCR、MSR、SCR 不在圖裡。** RTL 為它們 reset 了儲存，然後從不解碼，所以讀回來都是
+    0。把它們寫進圖裡只會讓模型預測設計給不出來的值。
 
-`test_uart.py` 直接用 agent 驅動這四個，而且有寫明。
+期望的 reset 值是從 `reg.get_reset()` 來的，所以 `.rdl` 仍是暫存器圖唯一被寫下來的地
+方。
 
-### pyuvm 需要而 PeakRDL 不給的四件事
+### 生成的模型需要的 pyuvm 設定
 
-每一件都是踩到失敗才找出來的，而且都寫在修它的那一行旁邊：
+PeakRDL 不會產出這些，`uart_env.py` 負責設定。碰到下面任一個錯誤，原因就在這裡：
 
-| | 沒有它會怎樣 |
+| 錯誤 | 解法 |
 |---|---|
-| 把 map 改設成 little-endian | PeakRDL 用 `UVM_NO_ENDIAN` 建它；pyuvm 讀成「沒指定 endianness」，走進 `_get_physical_addresses_to_map` 的錯誤分支，然後每次存取都死在 `TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'` |
-| `lock_model()` | 一樣的失敗，前面多一句 `Map 'regs.reg_map' does not seem to initialized correctly` |
-| `set_auto_predict(True)` | mirror 永遠停在 reset 值：`Register 'regs.LCR' value read from DUT (0x5F) does not match mirrored value (0x0)` |
-| `set_sv_uvm_style_reporting_enabled(True)` | 暫存器層的錯誤會送到一個叫 `RegModel` 的普通 `logging` logger，report server 從不計數，所以 `mirror(UVM_CHECK)` 記了 mismatch 而**測試照樣通過** |
+| 任何存取都出 `unsupported operand type(s) for +: 'NoneType' and 'int'` | map 是用 `UVM_NO_ENDIAN` 建的，pyuvm 讀成「沒指定 endianness」；用一個真的 endianness 重新 configure |
+| 同樣的錯誤，前面還有 `Map ... does not seem to initialized correctly` | `build()` 之後要呼叫 `lock_model()` |
+| `value read from DUT (0x5F) does not match mirrored value (0x0)` | `set_auto_predict(True)` —— 否則 mirror 永遠停在 reset 值 |
+| `mirror(UVM_CHECK)` 印出不符，測試卻還是過 | `set_sv_uvm_style_reporting_enabled(True)`，否則暫存器層的錯誤會進到 report server 不會算的那個 logger |
 
-關於第三件：把 `uvm_reg_predictor` 掛在 monitor 上，一般來說是更好的做法 —— 它能抓到不是
-暫存器層發起的寫入 —— 但在*這裡*是錯的。monitor 也看得到那些 map 故意不描述的 FCR
-流量，而 predictor 會把 `0x2` 的 FCR 寫入餵進 IIR 的 mirror，因為 map 在那個位址上放的是
-IIR。
-
-模型檢查的那些 reset 值不是誰猜得出來的，而且來自不同機制：
-
-```
-IER reads 0x00, .rdl says 0x00
-IIR reads 0xc1, .rdl says 0xc1     <- 讀取路徑上硬接的 0b1100 疊在 iir_q 上，而它 reset 成 0b0001
-LCR reads 0x00, .rdl says 0x00
-LSR reads 0x60, .rdl says 0x60
-```
-
-期望值來自 `reg.get_reset()`，不是測試裡寫的數字，所以 `.rdl` 仍然是暫存器圖唯一被寫下來
-的地方。
+用 auto-prediction 而不是在 monitor 上掛 `uvm_reg_predictor` 是刻意的。一般來說
+predictor 是更好的做法，但這裡的 monitor 也會看到圖裡描述不了的 FCR 流量，於是會把
+`0x2` 上的一次 FCR 寫入餵進 IIR 的 mirror。
 
 ## 跑在 gate 上
 
 ```bash
-make gds          # 產出 runs/<tag>/final/nl/apb_uart_sv.nl.v
-make cocotb-gl    # 用同樣六個測試驅動它
+make gds          # 寫出 runs/<tag>/final/nl/
+make cocotb-gl    # 拿同一份測試去驅動它
 ```
 
-不是第二份 testbench。同一份 Python、同一個 scoreboard、同一個暫存器模型，對著 netlist
-和 PDK 自己的 cell model 跑。一般的做法是另寫一份 gate-level testbench —— 那就是
-`make gatesim` 要的東西，也是 `config.yaml` 裡沒有 `//GATE_TESTS` 的原因：第二份
-testbench 就是第二個要跟第一個保持同步的 scoreboard，而它們一漂移，gate-level 那份就不
-再代表任何事。
+**讓它成立的規則只有一條：`test/` 裡不准碰 top-level port 以外的任何東西。** netlist
+裡所有內部名字都消失了。伸手進去的話，你會在這裡發現，錯誤訊息會指名合成掉的那條線。
+CI 每個 pull request 都跑它就是為了這個，而且只要幾秒。
 
-它能成立只因為 `test/` 裡沒有任何東西碰除了 top-level port 以外的東西。碰了就會在這裡
-知道，以一個指名被合成拿掉的 net 的 `AttributeError`。CI 因此在每個 PR 都跑它，而它只花
-三秒。
+**設計帶著 `` `timescale ``，而且必須帶。** gate-level 會把 PDK 的 cell model 跟
+netlist 一起編譯，而那些 model 帶著 `1ns/1ps`；RTL 自己不帶，所以 Icarus 會用「一秒」
+當精度跑它。cocotb 的 `step` 單位就是那個精度，也就是同一個時脈週期在兩次執行裡意思不
+一樣。`make rtl` 會把 `` `timescale 1ns / 1ps `` 寫進生成的 Verilog 讓兩邊對齊，測試則
+一律用奈秒。
 
-**它抓到的第一件事是 testbench 的 bug，不是設計的。** 第一次 gate-level 跑在 0.06 ns
-模擬時間就掛了，三個測試全掛 —— 暫存器測試是後來才有的：
+同樣的道理，gate-level 讀到 X 時不要去碰 `COCOTB_RESOLVE_X`。這些測試讀的暫存器都是測
+試自己寫過的、或是 reset 定義好的，所以 X 是真的壞了，而 `int()` 在它上面丟例外正是要
+保留的行為。
 
-```
-txn.rdata = int(self.dut.PRDATA.value)
-ValueError: Unresolvable bit in binary string: 'x'. Set the COCOTB_RESOLVE_X
-environment variable to configure how special values are resolved.
-```
+CI 那一步比對的是兩次執行的 summary 行，而不是寫死在 workflow 裡的數字：同一份測試、同
+樣的判定，兩邊都要一致。
 
-gate-level 會把 PDK 的 cell model 和 netlist 一起編進去，而 `sky130_fd_sc_hd.v` 帶著
-`` `timescale 1ns/1ps ``。生成的 RTL 完全沒有 timescale，所以 Icarus 用「一秒」當精度 ——
-而 cocotb 的 `step` 單位**就是**那個精度。測試要的兩步時鐘，在 **gate 上是 2 ps、在 RTL
-上是 2 s**。2 ps 的時鐘配上每顆 cell 1 ns 延遲，設計根本出不了 reset，它驅動的一切都是 X。
+## 時序與 constraint
 
-`make rtl` 現在會把 `` `timescale 1ns / 1ps `` 寫進生成的 Verilog，測試改成要求 10 ns。
+`config.yaml` 裡每個值旁邊都有它的理由。其中兩個值得在這裡說明。
 
-**誘人的錯解就寫在錯誤訊息裡。** `COCOTB_RESOLVE_X` 會把那個 X 變成 0，讓每個測試都在一
-個根本沒在跑的設計上通過。這裡讀的都是測試自己寫過、或 reset 有定義的暫存器，所以
-`PRDATA` 出現 X 就是 bug，`int()` 該炸就是該保留的行為。
-
-另寫一份 gate-level testbench 會有它自己的 `` `timescale ``、而且從來不跟另一份比較，所以
-永遠不會有任何東西指出這個不一致。這就是「一份 testbench 勝過兩份」的論證，而且沒人會事先
-拿這個當理由。
-
-**這一步斷言的**是兩次跑的結果一致：
+**`IO_DELAY_CONSTRAINT: 5`，預設是 20。** 預設會把每個時脈週期的五分之一保留給 port 上
+的外部延遲 —— 對一顆 pin 要驅動封裝和板子的設計是對的，對一個 `PRDATA` 只走到同一顆
+die 上 APB master 的 block 是錯的。它是百分比，所以也讓時脈週期變成很差的槓桿；required
+time 是
 
 ```
-RTL:   TESTS=6 PASS=6 FAIL=0 SKIP=0
-gates: TESTS=6 PASS=6 FAIL=0 SKIP=0
+週期 − clock uncertainty − IO_DELAY_CONSTRAINT × 週期
 ```
 
-兩行一樣，不是一個寫死的數字 —— 那個數字曾經寫死成 3，然後在三個全部通過的新測試上變紅。
+20% 時每多加一奈秒只拿回 0.8 ns，5% 時拿回 0.95 ns。
 
-## 收時序花了三個錯答案
+**`CLOCK_PERIOD: 11.0` —— 90.9 MHz，不是 100。** 用一個誠實的 port 預算，這個設計收不
+了 100 MHz：從 RX FIFO 的讀指標穿過 APB 讀取 mux 到 `PRDATA` 的那條路徑塞不進去。那條
+路徑大約三分之一是流程為了修 hold 插進來的延遲單元，而 hold slack 小到不能少插，所以不
+是調一個 constraint 就能解決的。要到 100 MHz 只能宣稱 port 的外部延遲是零，也就是斷言
+「不管是誰去 latch `PRDATA`，它自己不需要 setup time」。
 
-flow 把 setup 違規報成 **warning**，所以這個 repo 在一個收不了自己時脈的設計上綠過兩次：
+`ERROR_ON_SYNTH_CHECKS` 是關掉的，因為 DUT 的暫存器檔有 8 個自我迴圈的死位元，被合成前
+檢查報成邏輯迴圈。它們在最佳化之後就消失，從來沒進到 netlist。CI 有一步直接去斷言那些
+報告的內容，所以**新的**迴圈還是會讓 build 失敗。
 
-```
-setup slack      -0.75 ns  (24 violations)
-hold slack       +0.11 ns  (0 violations)
-signoff          clean  (Magic DRC, KLayout DRC, LVS, antenna, XOR)
-```
+## 不重跑整條流程
 
-那 24 條違規的終點**全部都是 port**：
-
-```
-Startpoint: uart_rx_fifo_i.pointer_out[1] (rising edge-triggered flip-flop)
-Endpoint: PRDATA[4] (out)
-                             8.502929   data arrival time
-               10.000000    10.000000   clock CLK (rise edge)
-               -0.250000     9.750000   clock uncertainty
-               -2.000000     7.750000   output external delay
-                             7.750000   data required time
-                            -0.752928   slack (VIOLATED)
-```
-
-`IO_DELAY_CONSTRAINT` 在 sky130 預設是 20 —— 每個時脈週期的五分之一保留給 port 的外部
-延遲，10 ns 裡的 2 ns。這對 pin 要驅動封裝和板子的設計是對的。這顆是 block：`PRDATA`
-走到同一顆 die 上的 APB master。它在為一塊不存在的板子付 2 ns。
-
-五輪，每輪都是完整的 flow：
-
-| `CLOCK_PERIOD` | `IO_DELAY_CONSTRAINT` | setup slack | violations |
-|---|---|---|---|
-| 10.0 | 20 | -0.75 ns | 24 |
-| **11.0** | 20 | -0.70 ns | 24 |
-| 10.0 | **5** | -0.03 ns | 1 |
-| 10.0 | 5 | + resizer margin 0.1 —— *跟上一列到 ps 完全相同* | 1 |
-| **11.0** | **5** | **+0.92 ns** | **0** |
-
-**第二列是陷阱。** 放鬆時脈週期每一奈秒只還回 0.8 ns，因為 I/O 預算是百分比，加的每一
-奈秒它都拿走五分之一。最明顯的槓桿看起來壞了 —— 而它其實就是對的槓桿，前提是預算從 20
-變成 5。`required = 0.95 × period − 0.25`，而不是 `0.8 × period − 0.25`。
-
-**第四列是把巧合當成因果。** 剩下的 slack 是 `-0.025290`，而
-`GRT_RESIZER_SETUP_SLACK_MARGIN` 的預設是 `0.025`，讀起來很像「resizer 停在它的 margin，
-然後 detailed routing 把它花掉」。把 margin 調到 0.1，arrival、cell 數、功耗**一點都沒
-變**。resizer 不是提早停下來；它根本改不動那條路徑。
-
-關於那條路徑值得知道的一件事：它 9.28 ns 裡有 2.83 ns 是 flow 為了修 **hold** 插進去的三
-顆 `clkdlybuf4s25`。setup 關鍵路徑將近三分之一是為了解決相反問題加的 padding，而 hold
-slack 只有 +0.10 ns，沒有空間少插一點。那才是這個設計真正的餘裕，而且不是改一個
-constraint 能拿到的。
-
-所以：90.9 MHz 配一個誠實的 0.55 ns port 預算，而不是 100 MHz 配一個等於零的 port 預算 ——
-後者是靠宣稱「不管是誰栓住 `PRDATA`，它都不需要自己的 setup time」在紙上收掉的。兩個數字、
-兩個繞路，都寫進 `config.yaml` 它們各自對應的值旁邊，因為一份只記答案的 config 會讓下一
-個人重走同樣三輪。
-
-而且現在 CI 會把關。`setup slack` 或 `hold slack` 報出任何不是 `(0 violations)` 的東西
-就讓 build 失敗，而且排在印出違規路徑那一步之後 —— 所以失敗會連著證據一起來。
-
-## 不重跑整個 flow 的迭代方式
-
-第一次 `make gds` 大約五分鐘。之後你改的大部分東西 —— `FP_CORE_UTIL`、`CLOCK_PERIOD`、
-floorplan —— 都不需要重做合成，所以把「接續上一次 run」的旗標交給 LibreLane：
+第一次 `make gds` 之後你會改的東西大多不需要重做合成 —— `FP_CORE_UTIL`、
+`CLOCK_PERIOD`、floorplan：
 
 ```bash
 make gds LIBRELANE_ARGS="--last-run --from floorplan"
 ```
 
-它會從 `runs/` 讀上一次的 run，這也是為什麼 `make clean` 不動那個目錄，而
-`make distclean` 才是刪它的那個。
+它會從 `runs/` 讀上一次的執行結果，這也是 `make clean` 不動那個目錄、而 `make distclean`
+才會刪掉它的原因。
 
-## 看見電路
+## 看電路
 
 ```bash
 make schematic
 ```
 
-畫出 `build/schematic.svg` —— 你的設計以 flop、加法器、mux 的樣子呈現，帶著 RTL 給它們的
-名字。用瀏覽器開，或在 VS Code 裡點開；它是 SVG，不需要任何特別的東西就能讀。
+畫出 `build/schematic.svg` —— 設計呈現成 flop、加法器、mux，帶著 RTL 給它們的名字。用瀏
+覽器開，或在 VS Code 裡點開。
 
-它不是 netlist 的圖。`make synth` 跑完整合成，留下數百顆 technology cell，從那裡沒有人
-學到過任何關於自己設計的事。`make schematic` 停得更早，停在電路還看得出是哪段程式碼的
-地方。
-
-不到一秒，所以每改一次都跑一下也不花什麼 —— 跟 `make gds` 不一樣。
+它不是 netlist 的圖。`make synth` 跑的是完整合成，留下幾百顆製程 cell，從來沒有人從那
+裡面看懂過自己的設計。`make schematic` 停得更早，停在電路還看得出原始程式碼的地方。一秒
+內跑完，所以改完東西順手跑一次不花什麼成本。
 
 ## 在容器裡工作
 
-這個 repo 附了一份 [Dev Container](https://containers.dev/)。用 GitHub Codespaces 開，或
-在 VS Code 裡 *Reopen in Container*，你就拿到 CI 用的同一個 image，Verilog 擴充套件也裝
-好了。`Makefile` 會發現自己已經在容器裡，直接呼叫工具而不是再套一層。
+這個 repo 附了 [Dev Container](https://containers.dev/)。用 GitHub Codespaces 開，或在
+VS Code 裡選 *Reopen in Container*，你會拿到 CI 用的同一個 image，Verilog 擴充套件都裝
+好了。`Makefile` 會發現自己已經在裡面，於是直接呼叫工具，不再多包一層容器。
 
-`make gds` 在裡面也能用：容器自己帶了一個 Docker daemon 給 LibreLane sidecar。如果
-`make gds` 說找不到 daemon，重建 Dev Container —— 它要的就是這個。
+`make gds` 在裡面也能用 —— 容器自帶一個 Docker daemon 給 LibreLane sidecar。如果它說找
+不到，重建 Dev Container。
 
 兩件要知道的事：
 
-*   **它以 `root` 執行。** 在 Linux host 上這意味著它寫進 `build/` 的檔案會歸 `root`，
-    所以從 host 跑 `make clean` 可能需要 `sudo`。改成普通使用者會弄壞 Codespaces。
-*   **在 Codespace 裡注意磁碟。** 內層 daemon 有自己的 image store，所以 LibreLane 的
-    image 會被再抓一次而不是跟 host 共用，Sky130 PDK 又是另外 3GB。在最小的 Codespace
-    機型上那幾乎是整顆磁碟 —— 選大一點的，或者從自己的 host 跑 `make gds`。
+*   **它以 `root` 執行。** 在 Linux host 上，它寫進 `build/` 的檔案屬於 `root`，所以從
+    host 跑 `make clean` 可能要 `sudo`。改成一般使用者會弄壞 Codespaces。
+*   **在 Codespace 裡要注意磁碟。** 內層 daemon 有自己的 image store，所以 LibreLane 的
+    image 是重抓一份而不是共用，PDK 又是 3GB。在最小的機型上那幾乎就是整顆磁碟。
 
-想留在自己的編輯器裡？`make shell` 會從任何終端機把你丟進同一個 image。
+`make shell` 可以從任何終端機進到同一個 image。
 
-## 設定參考
+## 設定檔參考
 
-`config.yaml` 是一份 [LibreLane](https://github.com/librelane/librelane) 設定檔。不屬於
-LibreLane 的 key 帶 `//` 前綴，它會直接忽略 —— 這就是讓一個檔案同時對兩個工具都有效的
-方法。
+`config.yaml` 是 [LibreLane](https://github.com/librelane/librelane) 的設定檔。不屬於
+LibreLane 的 key 都帶 `//` 前綴，它會忽略 —— 這就是讓同一個檔案對兩邊都有效的方法。
 
-| Key | 作用 |
+| Key | 說明 |
 |---|---|
-| `DESIGN_NAME` | 頂層 module 的名字。其他所有東西都從這裡讀。 |
-| `VERILOG_FILES` | 可合成的來源 —— 這裡就是 `make rtl` 生成的那一個檔案。LibreLane 把每一項當字面路徑驗證，不會展開 `**`。 |
-| `"//TEST_FILES"` | 給 `make sim` 的 Verilog testbench。可以用 glob。 |
-| `"//COCOTB_TESTS"` | 給 `make cocotb` 和 `make cocotb-gl` 的 Python testbench。只有定義 `@cocotb.test()` 的檔案放這裡；`test/` 其他檔案由它們 import。 |
-| `CLOCK_PORT` / `CLOCK_PERIOD` | 要約束的時脈，和它的週期（ns）。 |
-| `IO_DELAY_CONSTRAINT` | 週期的多少百分比保留給 port 的外部延遲。這裡是 5，預設是 20 —— 見上文。 |
-| `LINTER_DISABLE_WARNINGS` | 為設計豁免的 Verilator 警告。這裡有兩個，各自旁邊都寫了理由。 |
-| `LINTER_DISABLE_WARNINGS_BLACKBOX` | 同樣的東西，給 PDK 那些自己沒有 timescale 的 blackbox stub。 |
-| `ERROR_ON_SYNTH_CHECKS` | 這裡關掉，為了 DUT 暫存器檔裡八個自我迴圈的死位元。CI 改成直接斷言那些報告。 |
-| `FP_SIZING` / `FP_CORE_UTIL` | die 怎麼定大小 —— 見下文。 |
-| `PDK` / `STD_CELL_LIBRARY` | Sky130 和它的標準元件庫。別動。 |
+| `DESIGN_NAME` | 頂層模組名稱；其他所有東西都從這裡讀 |
+| `VERILOG_FILES` | 可合成的原始碼。每一項都會被當成字面路徑驗證，`**` 不會展開 |
+| `"//TEST_FILES"` | `make sim` 用的 Verilog testbench。可以用 glob |
+| `"//COCOTB_TESTS"` | `make cocotb` 和 `make cocotb-gl` 用的 Python testbench。只放有 `@cocotb.test()` 的檔案，`test/` 其餘檔案由它們 import |
+| `CLOCK_PORT` / `CLOCK_PERIOD` | 要約束的時脈，以及它的週期（ns） |
+| `IO_DELAY_CONSTRAINT` | 保留給 port 外部延遲的週期百分比 |
+| `LINTER_DISABLE_WARNINGS` | 為設計豁免的 Verilator 警告 |
+| `LINTER_DISABLE_WARNINGS_BLACKBOX` | 同上，但針對 PDK 的 blackbox stub |
+| `ERROR_ON_SYNTH_CHECKS` | 合成前檢查的錯誤是否中止流程 |
+| `FP_SIZING` / `FP_CORE_UTIL` | die 的尺寸怎麼決定 |
+| `PDK` / `STD_CELL_LIBRARY` | Sky130 及其標準元件庫。別動 |
 
-**die 會自己決定大小。** `FP_SIZING: relative` 依 `FP_CORE_UTIL` 做 floorplan —— core
-該多滿，這裡是 40%，最後出來 54.2% —— 所以比較大的設計會拿到比較大的 die，而不是「放不
-下」。繞線緊就調低，想要小一點的晶片就調高。
+**die 自己決定大小。** `FP_SIZING: relative` 依 `FP_CORE_UTIL`（core 該有多滿）來做
+floorplan，所以設計變大會得到更大的 die，而不是「塞不進去」。繞線很緊就調低它，想要小一
+點的晶片就調高。
 
-固定 die 還是可以用：設 `FP_SIZING: absolute` 再加 `DIE_AREA: [0, 0, w, h]`。不要在
-relative 模式下把 `DIE_AREA` 留在檔案裡 —— flow 已經不讀它了，但 GDS stream-out 還是會
-用它畫晶片邊界，然後 signoff 就會在一個其他人都沒用到的邊界上失敗。
+固定 die 仍然可用：`FP_SIZING: absolute` 配 `DIE_AREA: [0, 0, w, h]`。但在 relative
+模式下不要把 `DIE_AREA` 留在檔案裡 —— 流程會忽略它，可是 GDS stream-out 仍然照它畫晶片
+邊界，signoff 就會在一個沒人用過的邊界上失敗。
 
-檔案裡其他東西都屬於 LibreLane；完整清單見
-[它的文件](https://librelane.readthedocs.io/)，這個引擎讀哪些見
+其餘都屬於 LibreLane，完整清單見
+[它的文件](https://librelane.readthedocs.io/)，這個引擎讀哪些 key 見
 [c4o-core README](https://github.com/anlit75/c4o-core)。
