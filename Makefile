@@ -3,16 +3,16 @@
 
 # Image Configuration
 #
-# Pinned to the minor, not the patch. c4o-core publishes 2.9.0, 2.9, 2 and
-# latest for every release; 2.9 means a fix reaches you without anybody editing
-# this line, while a new behaviour never arrives unannounced. Pin 2.9.0 instead
+# Pinned to the minor, not the patch. c4o-core publishes 2.10.0, 2.10, 2 and
+# latest for every release; 2.10 means a fix reaches you without anybody editing
+# this line, while a new behaviour never arrives unannounced. Pin 2.10.0 instead
 # if you want a byte-identical image forever, and remember that you then also
 # own noticing its fixes.
 #
 # Three files carry this version -- here, .devcontainer/devcontainer.json, and
 # the docker pull in .github/workflows/verify.yml. CI refuses to continue when
 # they disagree, so change all three together.
-C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.9
+C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.10
 LIBRELANE_IMAGE := ghcr.io/librelane/librelane:3.0.14
 
 # Extra flags for the LibreLane run. The reason this exists is iteration: a
