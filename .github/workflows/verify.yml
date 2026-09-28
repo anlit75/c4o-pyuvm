@@ -51,6 +51,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: read  # only to ask whether Pages is on; see the results page steps
+    outputs:
+      publish-pages: ${{ steps.pages.outputs.publish }}
     steps:
       - uses: actions/checkout@v5
 
@@ -125,7 +128,7 @@ jobs:
           "
 
       - name: Pull c4o-core Image
-        run: docker pull ghcr.io/anlit75/c4o-core:2.8
+        run: docker pull ghcr.io/anlit75/c4o-core:2.9
 
       # The devcontainer runs as a named user so that files it creates on a
       # Linux host stay owned by the host user. That user comes from the base
@@ -404,6 +407,51 @@ jobs:
           fi
           make gatesim
 
+      # One page with what `make report` prints, the layout, the schematic and
+      # the cocotb verdicts. Built on every run, pull requests included, so a
+      # change that breaks the page is caught before it reaches main.
+      - name: Build the results page
+        run: |
+          make site
+          ls -lh build/site/
+
+      # Only main is published, and only when the repository has Pages set to
+      # "GitHub Actions". A copy of this template starts with Pages off, and
+      # turning it on is a setting no workflow token can change -- so off is
+      # a notice, not a red run. An answer that is neither yes nor no fails,
+      # because a silently unpublished page is the failure this step exists
+      # to rule out. README, "Commands".
+      - name: Is GitHub Pages set to publish from Actions?
+        id: pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code=$(curl -sS -o pages.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages")
+          case "$code" in
+            200)
+              build_type=$(python3 -c "import json; print(json.load(open('pages.json')).get('build_type'))")
+              if [ "$build_type" = workflow ]; then
+                echo "publish=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "::notice::GitHub Pages publishes from a branch here (build_type: $build_type), so the results page was not published. Settings > Pages > Source: GitHub Actions publishes it."
+              fi ;;
+            404)
+              echo "::notice::GitHub Pages is off for this repository, so the results page was not published. Settings > Pages > Source: GitHub Actions turns it on." ;;
+            *)
+              echo "Asking GitHub whether Pages is on returned HTTP $code:"
+              cat pages.json
+              exit 1 ;;
+          esac
+
+      - name: Upload the results page
+        if: steps.pages.outputs.publish == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: build/site
+
       # The schematic on its own, for the same reason the layout render gets
       # one below: it is a small file people actually want to open, and it is
       # otherwise only inside the ~10MB bundle. Its existence is already
@@ -449,3 +497,21 @@ jobs:
           # A glob, for the same reason the verify step above uses one.
           files: build/*.gds
           generate_release_notes: true
+
+  # Publishes the page full-flow built. A job of its own because deploying to
+  # Pages needs an OIDC token and the github-pages environment, and neither
+  # belongs on the job that runs everything else.
+  pages:
+    needs: full-flow
+    if: needs.full-flow.outputs.publish-pages == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy the results page
+        id: deploy
+        uses: actions/deploy-pages@v5

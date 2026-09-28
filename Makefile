@@ -3,16 +3,16 @@
 
 # Image Configuration
 #
-# Pinned to the minor, not the patch. c4o-core publishes 2.8.0, 2.8, 2 and
-# latest for every release; 2.8 means a fix reaches you without anybody editing
-# this line, while a new behaviour never arrives unannounced. Pin 2.8.0 instead
+# Pinned to the minor, not the patch. c4o-core publishes 2.9.0, 2.9, 2 and
+# latest for every release; 2.9 means a fix reaches you without anybody editing
+# this line, while a new behaviour never arrives unannounced. Pin 2.9.0 instead
 # if you want a byte-identical image forever, and remember that you then also
 # own noticing its fixes.
 #
 # Three files carry this version -- here, .devcontainer/devcontainer.json, and
 # the docker pull in .github/workflows/verify.yml. CI refuses to continue when
 # they disagree, so change all three together.
-C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.8
+C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.9
 LIBRELANE_IMAGE := ghcr.io/librelane/librelane:3.0.14
 
 # Extra flags for the LibreLane run. The reason this exists is iteration: a
@@ -64,7 +64,7 @@ else
 	C4O_PEAKRDL := $(DOCKER_RUN) --entrypoint peakrdl $(C4O_IMAGE)
 endif
 
-.PHONY: all help rtl ral lint sim cocotb cocotb-gl gatesim synth schematic gds pdk report clean distclean shell
+.PHONY: all help rtl ral lint sim cocotb cocotb-gl gatesim synth schematic gds pdk report site clean distclean shell
 
 all: lint sim cocotb synth
 
@@ -83,6 +83,7 @@ help:
 	@echo "  make pdk     - Install/Enable Sky130 PDK via Ciel"
 	@echo "  make gds     - Run LibreLane GDSII flow"
 	@echo "  make report  - Show area, timing and power from the last GDS run"
+	@echo "  make site    - Put report, layout, schematic and tests on one page (build/site/)"
 	@echo "  make shell   - Enter c4o-core interactive shell"
 	@echo "  make clean     - Remove build/ (keeps runs/, which report and gatesim read)"
 	@echo "  make distclean - Remove build/ and runs/"
@@ -250,6 +251,12 @@ gds:
 # Reads runs/<tag>/final/metrics.json, which `make gds` leaves behind.
 report:
 	$(C4O_CMD) report
+
+# build/site/index.html: what `report` prints, the layout render, the schematic
+# and both cocotb runs' verdicts, on one page. Shows whatever has been run so
+# far. CI publishes it to GitHub Pages from main.
+site:
+	$(C4O_CMD) site
 
 # --- Utilities ---
 

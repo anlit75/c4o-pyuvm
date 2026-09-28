@@ -98,12 +98,17 @@ make cocotb-gl    # 同一份測試，跑在 gate 上
 | `make schematic` | 把電路畫成 SVG | `build/schematic.svg` |
 | `make gds` | 用 LibreLane 做物理 layout | `build/apb_uart_sv.gds` |
 | `make report` | 上一次 `make gds` 的面積、時序、功耗、signoff | 終端機 |
+| `make site` | 把 `report`、layout、電路圖和兩次 cocotb 結果放進同一個網頁 | `build/site/index.html` |
 | `make shell` | 進入 c4o-core 容器 | — |
 | `make clean` | 刪掉 `build/`，保留 `runs/` | — |
 | `make distclean` | 刪掉 `build/` 和 `runs/` | — |
 
 `make cocotb SEED=<n>` 重播一次隨機失敗。payload 會記進 log，所以一次紅掉的 CI 會同時
 告訴你 seed 和那些位元組。
+
+CI 每次都會產生 `make site` 的網頁，並在 **Settings → Pages → Source** 設成
+**GitHub Actions** 之後，從 `main` 發佈到 GitHub Pages。還沒設定時 CI 照樣會過，只會用
+一則 notice 告訴你這次沒有發佈。
 
 ## 專案結構
 

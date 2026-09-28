@@ -1,6 +1,6 @@
 {
     "name": "ChipForAll",
-    "image": "ghcr.io/anlit75/c4o-core:2.8",
+    "image": "ghcr.io/anlit75/c4o-core:2.9",
     // Do not change this to a non-root user without testing a Codespace.
     // "ubuntu" (the user ubuntu:24.04 ships at uid 1000) looked like the right
     // answer -- it keeps files created here owned by the host user on Linux --
