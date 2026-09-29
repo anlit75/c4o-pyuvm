@@ -98,7 +98,7 @@ make cocotb-gl    # 同一份測試，跑在 gate 上
 | `make schematic` | 把電路畫成 SVG | `build/schematic.svg` |
 | `make gds` | 用 LibreLane 做物理 layout | `build/apb_uart_sv.gds` |
 | `make report` | 上一次 `make gds` 的面積、時序、功耗、signoff | 終端機 |
-| `make site` | 把 `report`、signoff 檢查、最差 setup path、面積與功耗拆分、layout、電路圖和兩次 cocotb 結果放進同一個網頁 | `build/site/index.html` |
+| `make site` | 把 `report`、signoff 檢查、最差 setup path、面積與功耗拆分、layout、方塊圖、電路圖、`make sim` 的波形和兩次 cocotb 結果放進同一個網頁 | `build/site/index.html` |
 | `make shell` | 進入 c4o-core 容器 | — |
 | `make clean` | 刪掉 `build/`，保留 `runs/` | — |
 | `make distclean` | 刪掉 `build/` 和 `runs/` | — |
