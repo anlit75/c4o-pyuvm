@@ -253,6 +253,7 @@ what keeps one file valid for both tools.
 | `VERILOG_FILES` | synthesisable sources. Each entry is validated as a literal path; `**` is not expanded |
 | `"//TEST_FILES"` | Verilog testbenches for `make sim`. Globs work |
 | `"//COCOTB_TESTS"` | Python testbenches for `make cocotb` and `make cocotb-gl`. Only files defining `@cocotb.test()`; the rest of `test/` is imported by them |
+| `"//WAVE_SIGNALS"` | Signals `make site` draws from `make sim`'s VCD, named from the testbench top down (`tb_apb_uart.PADDR`). A name the VCD does not declare fails `make site` |
 | `CLOCK_PORT` / `CLOCK_PERIOD` | the clock to constrain, and its period in ns |
 | `IO_DELAY_CONSTRAINT` | percentage of the period reserved as external delay on the ports |
 | `LINTER_DISABLE_WARNINGS` | Verilator warnings waived for the design |

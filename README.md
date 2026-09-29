@@ -111,7 +111,7 @@ because neither yosys nor Icarus reads the original. `make rtl` regenerates it.
 | `make schematic` | the circuit as an SVG | `build/schematic.svg` |
 | `make gds` | the physical layout, via LibreLane | `build/apb_uart_sv.gds` |
 | `make report` | area, timing, power and signoff from the last `make gds` | terminal |
-| `make site` | `report`, signoff checks, the worst setup path, area and power splits, the layout, the schematic and both cocotb runs on one page | `build/site/index.html` |
+| `make site` | `report`, signoff checks, the worst setup path, area and power splits, the layout, the block diagram, the schematic, the `make sim` waveform and both cocotb runs on one page | `build/site/index.html` |
 | `make shell` | a shell inside the c4o-core container | — |
 | `make clean` | remove `build/`, keep `runs/` | — |
 | `make distclean` | remove `build/` and `runs/` | — |

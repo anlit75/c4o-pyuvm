@@ -229,6 +229,7 @@ LibreLane 的 key 都帶 `//` 前綴，它會忽略 —— 這就是讓同一個
 | `VERILOG_FILES` | 可合成的原始碼。每一項都會被當成字面路徑驗證，`**` 不會展開 |
 | `"//TEST_FILES"` | `make sim` 用的 Verilog testbench。可以用 glob |
 | `"//COCOTB_TESTS"` | `make cocotb` 和 `make cocotb-gl` 用的 Python testbench。只放有 `@cocotb.test()` 的檔案，`test/` 其餘檔案由它們 import |
+| `"//WAVE_SIGNALS"` | `make site` 從 `make sim` 的 VCD 畫的訊號，從測試平台頂層往下寫（`tb_apb_uart.PADDR`）。VCD 裡沒有的名字會讓 `make site` 失敗 |
 | `CLOCK_PORT` / `CLOCK_PERIOD` | 要約束的時脈，以及它的週期（ns） |
 | `IO_DELAY_CONSTRAINT` | 保留給 port 外部延遲的週期百分比 |
 | `LINTER_DISABLE_WARNINGS` | 為設計豁免的 Verilator 警告 |

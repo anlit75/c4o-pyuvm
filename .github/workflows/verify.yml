@@ -128,7 +128,7 @@ jobs:
           "
 
       - name: Pull c4o-core Image
-        run: docker pull ghcr.io/anlit75/c4o-core:2.10
+        run: docker pull ghcr.io/anlit75/c4o-core:2.11
 
       # The devcontainer runs as a named user so that files it creates on a
       # Linux host stay owned by the host user. That user comes from the base
@@ -417,7 +417,10 @@ jobs:
           # After make gds these four come from the run's own reports. Each is
           # left out silently when its report is missing, so a LibreLane
           # upgrade that moved one would otherwise just shrink the page.
-          for section in "Signoff checks" "Worst setup path" "Area" "Power"; do
+          # This design is five blocks and its config asks for a waveform, so
+          # both of those are required here too.
+          for section in "Signoff checks" "Worst setup path" "Area" "Power" \
+                         "Waveform" "Block diagram"; do
             grep -qF "<h2>$section</h2>" build/site/index.html \
               || { echo "The results page has no '$section' section."; exit 1; }
           done
