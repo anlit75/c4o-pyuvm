@@ -424,6 +424,12 @@ jobs:
             grep -qF "<h2>$section</h2>" build/site/index.html \
               || { echo "The results page has no '$section' section."; exit 1; }
           done
+          # The page names the commit it was built from, so a published page
+          # can always say which run it shows. c4o-core only writes that line
+          # when GITHUB_* reach it, and they reach it only if `make site`
+          # passes them into the container -- for a long time it did not.
+          grep -qF "/commit/$GITHUB_SHA" build/site/index.html \
+            || { echo "::error::The results page does not link commit $GITHUB_SHA. make site has to pass GITHUB_* into the container."; exit 1; }
 
       # Only main is published, and only when the repository has Pages set to
       # "GitHub Actions". A copy of this template starts with Pages off, and
