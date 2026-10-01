@@ -128,7 +128,7 @@ jobs:
           "
 
       - name: Pull c4o-core Image
-        run: docker pull ghcr.io/anlit75/c4o-core:2.13
+        run: docker pull ghcr.io/anlit75/c4o-core:2.14
 
       # The devcontainer runs as a named user so that files it creates on a
       # Linux host stay owned by the host user. That user comes from the base
