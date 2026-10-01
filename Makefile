@@ -65,10 +65,17 @@ ENTRYPOINT_SCRIPT := /opt/c4o-core/scripts/entrypoint.py
 # rather than through the entrypoint. Neither is a c4o-core command -- they are
 # binaries the image carries -- so on the host they need --entrypoint, and in the
 # container they are just on PATH.
+# The results page names the commit and CI run it was built from, which c4o-core
+# reads from these. Without them a published page cannot say which commit it
+# shows. `-e NAME` with no value passes the host's value through, and passes
+# nothing when the host has none, so a local `make site` is unaffected.
+SITE_ENV := -e GITHUB_SERVER_URL -e GITHUB_REPOSITORY -e GITHUB_SHA -e GITHUB_RUN_ID
+
 ifneq ($(wildcard $(ENTRYPOINT_SCRIPT)),)
 	# Case A: We are inside the DevContainer
 	C4O_CMD := python3 $(ENTRYPOINT_SCRIPT)
 	C4O_COCOTB = $(if $(SEED),env RANDOM_SEED=$(SEED)) $(C4O_CMD)
+	C4O_SITE := $(C4O_CMD)
 	C4O_PDK := env PDK_ROOT=$(PDK_ROOT) $(C4O_CMD)
 	C4O_SV2V := sv2v
 	C4O_PEAKRDL := peakrdl
@@ -76,6 +83,7 @@ else
 	# Case B: We are on the Host Machine
 	C4O_CMD := $(DOCKER_RUN) $(C4O_IMAGE)
 	C4O_COCOTB = $(DOCKER_RUN) $(if $(SEED),-e RANDOM_SEED=$(SEED)) $(C4O_IMAGE)
+	C4O_SITE := $(DOCKER_RUN) $(SITE_ENV) $(C4O_IMAGE)
 	C4O_PDK := $(DOCKER_RUN) -v $(PDK_ROOT):/pdks -e PDK_ROOT=/pdks $(C4O_IMAGE)
 	C4O_SV2V := $(DOCKER_RUN) --entrypoint sv2v $(C4O_IMAGE)
 	C4O_PEAKRDL := $(DOCKER_RUN) --entrypoint peakrdl $(C4O_IMAGE)
@@ -280,7 +288,7 @@ report:
 # and both cocotb runs' verdicts, on one page. Shows whatever has been run so
 # far. CI publishes it to GitHub Pages from main.
 site:
-	$(C4O_CMD) site
+	$(C4O_SITE) site
 
 # --- Utilities ---
 
