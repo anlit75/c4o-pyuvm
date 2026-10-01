@@ -26,6 +26,10 @@ VERILOG_FILES:
 "//COCOTB_TESTS":
   - dir::test/test_*.py
 
+# One line under the title of the results page (`make site`) and in its link
+# preview when the page is shared.
+"//DESCRIPTION": "A 16550-style UART verified with pyuvm: APB agent, scoreboard and a SystemRDL register model, on RTL and gates, to GDS."
+
 # What the results page (`make site`) draws from the smoke test's VCD: the APB
 # writes that configure the UART and send 0xA5, the status reads, and the
 # serial line carrying the byte.
