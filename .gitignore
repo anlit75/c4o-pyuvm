@@ -4,3 +4,4 @@ pdks
 *.vcd
 *.log
 __pycache__/
+.c4o/
