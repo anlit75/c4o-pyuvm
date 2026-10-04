@@ -129,6 +129,21 @@ jobs:
           fi
           echo "test/uart_ral.py is byte-identical to what make ral produces."
 
+      # src/apb_uart_sv.v is sv2v's output for src/vendor/apb_uart_sv/*.sv plus a
+      # header of ours, committed so a fresh clone can run the flow. Same
+      # drift as above: change the SystemVerilog or the header in the Makefile,
+      # forget `make rtl`, and the flow reads a file that is out of date.
+      - name: The Verilog matches the SystemVerilog it came from
+        run: |
+          cp src/apb_uart_sv.v /tmp/committed_rtl.v
+          make rtl
+          if ! diff -u /tmp/committed_rtl.v src/apb_uart_sv.v; then
+            echo "src/apb_uart_sv.v is not what make rtl generates."
+            echo "Run 'make rtl' and commit the result."
+            exit 1
+          fi
+          echo "src/apb_uart_sv.v is byte-identical to what make rtl produces."
+
       - name: Physical design
         uses: anlit75/c4o-core/actions/gds@v2
 

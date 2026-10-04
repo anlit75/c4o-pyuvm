@@ -30,7 +30,7 @@ from uart_ral import apb_uart
 # not: a gate-level run compiles the PDK cell models alongside the netlist, those
 # carry 1ns/1ps, and a step there is a picosecond -- while the RTL on its own has
 # no timescale at all, so a step is a second. The same two-step clock was 2 ps of
-# gates and 2 s of RTL, which is how `make cocotb-gl` first failed.
+# gates and 2 s of RTL, which is how `make gatesim` first failed.
 CLOCK_PERIOD_NS = 10
 
 

@@ -5,7 +5,7 @@ The data path: three tests, all over the DUT's own loopback.
 cocotb elaborates the DUT as the root -- there is no testbench module to do the
 tie in. That turns out to be the right thing anyway: a coroutine copying one port
 to another works the same on the synthesised netlist, and nothing in these tests
-or in apb_agent.py reaches inside the design, so `make cocotb-gl` runs exactly
+or in apb_agent.py reaches inside the design, so `make gatesim` runs exactly
 this Python against the gates.
 
 The registers are driven raw here, not through the register model. That is on
