@@ -137,7 +137,7 @@ mirror.
 
 ```bash
 make gds          # writes runs/<tag>/final/nl/
-make cocotb-gl    # drives it with the same tests
+make gatesim      # drives it with the same tests
 ```
 
 **One rule makes it work: nothing in `test/` may touch anything but the top-level
@@ -156,8 +156,8 @@ For the same reason, do not reach for `COCOTB_RESOLVE_X` when a gate-level read
 returns X. The registers these tests read are ones the test wrote or reset defines,
 so an X is a real failure and `int()` raising on it is the behaviour to keep.
 
-The CI step compares the two runs' summary lines rather than a count written into
-the workflow: the same tests, the same verdicts, on both.
+The shared report step in CI compares the two runs' summary lines rather than a count
+written into the workflow: the same tests, the same verdicts, on both.
 
 ## Constraints
 
@@ -259,7 +259,7 @@ what keeps one file valid for both tools.
 | `DESIGN_NAME` | the top module's name; everything else reads it from here |
 | `VERILOG_FILES` | synthesisable sources. Each entry is validated as a literal path; `**` is not expanded |
 | `"//TEST_FILES"` | Verilog testbenches for `make sim`. Globs work |
-| `"//COCOTB_TESTS"` | Python testbenches for `make cocotb` and `make cocotb-gl`. Only files defining `@cocotb.test()`; the rest of `test/` is imported by them |
+| `"//COCOTB_TESTS"` | Python testbenches for `make cocotb` and `make gatesim`. Only files defining `@cocotb.test()`; the rest of `test/` is imported by them |
 | `"//DESCRIPTION"` | one line under the results page's title and in its link preview: what the design is |
 | `"//WAVE_SIGNALS"` | Signals `make site` draws from `make sim`'s VCD, named from the testbench top down (`tb_apb_uart.PADDR`). A name the VCD does not declare fails `make site` |
 | `CLOCK_PORT` / `CLOCK_PERIOD` | the clock to constrain, and its period in ns |

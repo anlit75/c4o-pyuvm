@@ -105,8 +105,8 @@ jobs:
         uses: anlit75/c4o-core/actions/setup@v2
 
       # Lint, the Verilog testbench, the pyuvm tests against the RTL (their
-      # output is kept in build/cocotb-rtl.log for the gate-level step below),
-      # synthesis and the schematic.
+      # output is kept in build/cocotb-rtl.log, which the Report step compares
+      # the gate-level run with), synthesis and the schematic.
       - name: Fast checks
         uses: anlit75/c4o-core/actions/checks@v2
 
@@ -215,58 +215,13 @@ jobs:
           done
           echo "Timing closes:$setup /$hold"
 
-      # The point of this repository, in one step: the same three pyuvm tests
-      # that ran against the RTL in step 2b, run again against the gates that
-      # `make gds` just produced. Not a second testbench -- the same Python.
-      #
-      # It only works because nothing in test/ reaches inside the design. If
-      # something does, this is where it shows up, as an AttributeError naming a
-      # net synthesis removed, and that is worth catching on every pull request
-      # rather than at a tag.
-      #
-      # Asserts the count, not just the exit code: `make cocotb-gl` would also
-      # exit 0 having somehow run one test, and one test passing on the gates is
-      # not the claim.
-      - name: The same tests, against the gates
-        run: |
-          if [ ! -f build/cocotb-rtl.log ]; then
-            echo "Step 2b ran no Python testbenches, so there is nothing to re-run."
-            exit 0
-          fi
-          set -o pipefail
-          make cocotb-gl 2>&1 | tee build/cocotb-gl.log
-
-          # Compared against the RTL run's own summary, not against a count
-          # written here. This step's claim is that the gates run the same tests
-          # as the RTL and reach the same verdicts, and that is exactly what the
-          # two lines being identical says. A hardcoded number said something
-          # weaker and needed editing every time a test was added -- which is how
-          # this step first went red, on three new tests that all passed.
-          # `|| true` because a log with no summary line is a case this step
-          # reports, not one it should die on: under `bash -e` with pipefail an
-          # empty grep would kill the script at the assignment below, before the
-          # message that explains why.
-          summary() {
-            grep -o 'TESTS=[0-9]* PASS=[0-9]* FAIL=[0-9]* SKIP=[0-9]*' "$1" | tail -1 || true
-          }
-          rtl=$(summary build/cocotb-rtl.log)
-          gates=$(summary build/cocotb-gl.log)
-          echo "RTL:   $rtl"
-          echo "gates: $gates"
-
-          case "$gates" in
-            "") echo "The gate-level run printed no summary line at all."; exit 1 ;;
-            *"FAIL=0 SKIP=0") ;;
-            *) echo "The gate-level run did not pass everything it ran."; exit 1 ;;
-          esac
-          if [ "$rtl" != "$gates" ]; then
-            echo "The gates did not run the same tests as the RTL, which is what this"
-            echo "step is for. Compare the two lines above."
-            exit 1
-          fi
-
       # "Block diagram" is this repository's own section of the results page;
       # the action checks the ones every flow gives.
+      #
+      # The action also runs the same pyuvm tests again against the gates that
+      # `make gds` produced, and fails unless the summary line matches the RTL
+      # run's. Not a second testbench -- the same Python. If a test reaches
+      # inside the design, that is where it shows up, on every pull request.
       - name: Report
         id: report
         uses: anlit75/c4o-core/actions/report@v2
@@ -283,10 +238,10 @@ jobs:
       # Last among the flow steps, so a failure here does not hide theirs, and
       # so the steps above read a run directory with one of each step.
       #
-      # Not on pull requests, for the reason the gate-level step gives: it runs
-      # the flow from floorplan a second time, and the command only changes
-      # when the Makefile or the LibreLane pin does. Phrased the same way, so
-      # workflow_dispatch exercises it on a branch before merging.
+      # Not on pull requests: it runs the flow from floorplan a second time,
+      # and the command only changes when the Makefile or the LibreLane pin
+      # does. Phrased as "not a pull request", so workflow_dispatch exercises
+      # it on a branch before merging.
       - name: Resuming from floorplan works, as the guide says it does
         if: github.event_name != 'pull_request'
         run: |

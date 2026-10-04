@@ -126,7 +126,7 @@ predictor 是更好的做法，但這裡的 monitor 也會看到圖裡描述不�
 
 ```bash
 make gds          # 寫出 runs/<tag>/final/nl/
-make cocotb-gl    # 拿同一份測試去驅動它
+make gatesim      # 拿同一份測試去驅動它
 ```
 
 **讓它成立的規則只有一條：`test/` 裡不准碰 top-level port 以外的任何東西。** netlist
@@ -143,7 +143,7 @@ netlist 一起編譯，而那些 model 帶著 `1ns/1ps`；RTL 自己不帶，所
 試自己寫過的、或是 reset 定義好的，所以 X 是真的壞了，而 `int()` 在它上面丟例外正是要
 保留的行為。
 
-CI 那一步比對的是兩次執行的 summary 行，而不是寫死在 workflow 裡的數字：同一份測試、同
+CI 裡共用的 report 那一步比對的是兩次執行的 summary 行，而不是寫死在 workflow 裡的數字：同一份測試、同
 樣的判定，兩邊都要一致。
 
 ## 時序與 constraint
@@ -233,7 +233,7 @@ LibreLane 的 key 都帶 `//` 前綴，它會忽略 —— 這就是讓同一個
 | `DESIGN_NAME` | 頂層模組名稱；其他所有東西都從這裡讀 |
 | `VERILOG_FILES` | 可合成的原始碼。每一項都會被當成字面路徑驗證，`**` 不會展開 |
 | `"//TEST_FILES"` | `make sim` 用的 Verilog testbench。可以用 glob |
-| `"//COCOTB_TESTS"` | `make cocotb` 和 `make cocotb-gl` 用的 Python testbench。只放有 `@cocotb.test()` 的檔案，`test/` 其餘檔案由它們 import |
+| `"//COCOTB_TESTS"` | `make cocotb` 和 `make gatesim` 用的 Python testbench。只放有 `@cocotb.test()` 的檔案，`test/` 其餘檔案由它們 import |
 | `"//DESCRIPTION"` | 結果網頁標題下方、以及分享連結預覽裡的一句話：這個設計是什麼 |
 | `"//WAVE_SIGNALS"` | `make site` 從 `make sim` 的 VCD 畫的訊號，從測試平台頂層往下寫（`tb_apb_uart.PADDR`）。VCD 裡沒有的名字會讓 `make site` 失敗 |
 | `CLOCK_PORT` / `CLOCK_PERIOD` | 要約束的時脈，以及它的週期（ns） |
