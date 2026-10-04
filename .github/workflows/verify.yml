@@ -18,6 +18,14 @@ on:
   workflow_dispatch:
 
 jobs:
+  # PROTOTYPE: how do the jobs of a workflow called from another repository
+  # show up as checks, and how does a skipped one report?
+  proto-call:
+    uses: anlit75/c4o-core/.github/workflows/proto-called.yml@proto-shared-ci
+  proto-call-skipped:
+    if: ${{ false }}
+    uses: anlit75/c4o-core/.github/workflows/proto-called.yml@proto-shared-ci
+
   # The Dev Container is the "zero install" promise, and nothing else here
   # exercises it -- the job below runs on the host, against the plain image.
   # So a devcontainer.json change could only be caught by opening a Codespace
@@ -57,17 +65,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # --- PERFORMANCE OPTIMIZATION ---
-      # Cache the ~3GB Sky130 PDK to save CI time and bandwidth.
-      # Volare will automatically skip downloading if the target hash exists in this cached directory.
-      - name: Cache Sky130 PDK
-        id: cache-pdk
-        uses: actions/cache@v5
-        with:
-          path: pdks
-          key: sky130-pdk-${{ runner.os }}-v1
-          restore-keys: |
-            sky130-pdk-${{ runner.os }}-
+      # PROTOTYPE: image pull, PDK cache and LibreLane pre-pull come from c4o-core
+      # instead of living in this file.
+      - name: c4o-core setup
+        id: setup
+        uses: anlit75/c4o-core/actions/setup@proto-shared-ci
+
+      - name: What the shared setup reported
+        run: |
+          echo "image:       ${{ steps.setup.outputs.image }}"
+          echo "pdk version: ${{ steps.setup.outputs.pdk-version }}"
+          echo "cache hit:   ${{ steps.setup.outputs.cache-hit }}"
+          ls pdks 2>/dev/null | head -3 || echo "pdks/ not restored (first run on this key)"
 
       # c4o-core's version tag is repeated three times because nothing here
       # reads it from a single source: the Makefile drives `make gds`, this
