@@ -102,13 +102,13 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Setup
-        uses: anlit75/c4o-core/actions/setup@feat/shared-ci-actions
+        uses: anlit75/c4o-core/actions/setup@v2
 
       # Lint, the Verilog testbench, the pyuvm tests against the RTL (their
       # output is kept in build/cocotb-rtl.log for the gate-level step below),
       # synthesis and the schematic.
       - name: Fast checks
-        uses: anlit75/c4o-core/actions/checks@feat/shared-ci-actions
+        uses: anlit75/c4o-core/actions/checks@v2
 
       # test/uart_ral.py is generated from regs/apb_uart.rdl and committed, so a
       # fresh clone can run the tests. Committing generated code buys that and
@@ -130,7 +130,7 @@ jobs:
           echo "test/uart_ral.py is byte-identical to what make ral produces."
 
       - name: Physical design
-        uses: anlit75/c4o-core/actions/gds@feat/shared-ci-actions
+        uses: anlit75/c4o-core/actions/gds@v2
 
       # config.yaml turns ERROR_ON_SYNTH_CHECKS off, because the DUT's register
       # file has eight dead self-looping bits that would otherwise stop the flow
@@ -269,13 +269,13 @@ jobs:
       # the action checks the ones every flow gives.
       - name: Report
         id: report
-        uses: anlit75/c4o-core/actions/report@feat/shared-ci-actions
+        uses: anlit75/c4o-core/actions/report@v2
         with:
           sections: Block diagram
 
       - name: Upload
         if: always()
-        uses: anlit75/c4o-core/actions/upload@feat/shared-ci-actions
+        uses: anlit75/c4o-core/actions/upload@v2
 
   # Publishes the page full-flow built. A job of its own because deploying to
   # Pages needs an OIDC token and the github-pages environment, and neither
