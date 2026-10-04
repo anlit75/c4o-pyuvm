@@ -27,7 +27,7 @@ rather than discovered later. Delete otherwise.
 
 |                | before | after |
 |----------------|--------|-------|
-| standard cells |        |       |
+| instances      |        |       |
 | setup slack    |        |       |
 | utilization    |        |       |
 -->
