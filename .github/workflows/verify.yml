@@ -273,6 +273,49 @@ jobs:
         with:
           sections: Block diagram
 
+      # docs/guide.md, "Iterating without re-running the whole flow", gives one
+      # command for resuming from floorplan. Nothing ran the command it used to
+      # give, and it had stopped working three separate ways with every other
+      # step here green. So run it, and check what that section says: the
+      # resume needs the state file it names, synthesis is not redone, and the
+      # resumed steps are added after the old ones.
+      #
+      # Last among the flow steps, so a failure here does not hide theirs, and
+      # so the steps above read a run directory with one of each step.
+      #
+      # Not on pull requests, for the reason the gate-level step gives: it runs
+      # the flow from floorplan a second time, and the command only changes
+      # when the Makefile or the LibreLane pin does. Phrased the same way, so
+      # workflow_dispatch exercises it on a branch before merging.
+      - name: Resuming from floorplan works, as the guide says it does
+        if: github.event_name != 'pull_request'
+        run: |
+          shopt -s nullglob
+          netlists=(runs/*/*-yosys-synthesis/*.nl.v)
+          states=(runs/*/*-openroad-floorplan/state_in.json)
+          if [ ${#netlists[@]} -ne 1 ] || [ ${#states[@]} -ne 1 ]; then
+            echo "::error::Expected one synthesis step and one floorplan step under runs/ before resuming, found ${#netlists[@]} and ${#states[@]}. make gds did not start from an empty run."
+            exit 1
+          fi
+          before=$(stat -c %Y "${netlists[0]}")
+
+          make gds LIBRELANE_ARGS="--from OpenROAD.Floorplan --with-initial-state ${states[0]}"
+
+          after=$(stat -c %Y "${netlists[0]}")
+          synth=(runs/*/*-yosys-synthesis)
+          if [ "$before" != "$after" ] || [ ${#synth[@]} -ne 1 ]; then
+            echo "::error::The guide says resuming from floorplan does not redo synthesis. It was redone:"
+            ls -ld --time-style=full-iso "${synth[@]}" "${netlists[0]}"
+            exit 1
+          fi
+          floorplans=(runs/*/*-openroad-floorplan)
+          if [ ${#floorplans[@]} -ne 2 ]; then
+            echo "::error::The guide says the resumed steps are added after the old ones. Expected two floorplan directories, found ${#floorplans[@]}:"
+            printf '  %s\n' "${floorplans[@]}"
+            exit 1
+          fi
+          echo "  resumed from floorplan: synthesis kept, resumed steps added after the old ones"
+
       - name: Upload
         if: always()
         uses: anlit75/c4o-core/actions/upload@v2
