@@ -10,14 +10,46 @@ on:
       - '.gitignore'
   # No paths-ignore here, deliberately. A required status check that never runs
   # is not "skipped", it is "Expected -- waiting for status to be reported", and
-  # the pull request can never be merged. A docs-only change costs one full run;
-  # a permanently unmergeable pull request costs more. The push trigger above
-  # keeps its filter, so merging docs to main still skips the flow.
+  # the pull request can never be merged. The `changes` job below skips the flow
+  # for a docs-only pull request instead, and reports as skipped.
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
+  # A pull request that changes only what the push trigger above ignores --
+  # Markdown, LICENSE, .gitignore -- does not run the flow. No step below reads
+  # any of those files.
+  #
+  # Decided in a job because of the trap described above: with paths-ignore the
+  # check never reports, and here it reports as skipped. Everything is unchecked
+  # on such a pull request; one that touches any other file runs all of it.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      code: ${{ steps.files.outputs.code }}
+    steps:
+      - name: Does this change anything the flow reads?
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
+          echo "$files"
+          other=$(grep -vxE '.*\.md|LICENSE|\.gitignore' <<<"$files" || true)
+          if [ -n "$files" ] && [ -z "$other" ]; then
+            echo "::notice::Docs only: the flow is not run for this pull request."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+
   # The Dev Container is the "zero install" promise, and nothing else here
   # exercises it -- the job below runs on the host, against the plain image.
   # So a devcontainer.json change could only be caught by opening a Codespace
@@ -30,6 +62,8 @@ jobs:
   # a 3GB PDK and twenty minutes -- and it cannot speak for Codespaces, whose
   # remote server is a different thing again.
   devcontainer:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -47,132 +81,34 @@ jobs:
             echo "--- the in-container delegation path ---"
             make lint
 
+  # The steps every repository made from the ChipForAll template shares -- the
+  # image and PDK setup, the fast checks, the flow, the report, the uploads --
+  # are composite actions in c4o-core, so a fix to them arrives here without
+  # anybody copying it. The steps written out below are this repository's own.
+  # They sit in the same job because they read what the flow leaves in runs/
+  # and build/.
   full-flow:
+    needs: changes
+    # Runs unless the job above said no. If that job fails, its output is
+    # empty and this still runs: a broken decision must not look like a pass.
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pages: read  # only to ask whether Pages is on; see the results page steps
+      pages: read  # only to ask whether Pages is on
     outputs:
-      publish-pages: ${{ steps.pages.outputs.publish }}
+      publish-pages: ${{ steps.report.outputs.publish-pages }}
     steps:
       - uses: actions/checkout@v5
 
-      # --- PERFORMANCE OPTIMIZATION ---
-      # Cache the ~3GB Sky130 PDK to save CI time and bandwidth.
-      # Volare will automatically skip downloading if the target hash exists in this cached directory.
-      - name: Cache Sky130 PDK
-        id: cache-pdk
-        uses: actions/cache@v5
-        with:
-          path: pdks
-          key: sky130-pdk-${{ runner.os }}-v1
-          restore-keys: |
-            sky130-pdk-${{ runner.os }}-
+      - name: Setup
+        uses: anlit75/c4o-core/actions/setup@v2
 
-      # c4o-core's version tag is repeated three times because nothing here
-      # reads it from a single source: the Makefile drives `make gds`, this
-      # workflow pulls the image before the Makefile ever runs, and
-      # devcontainer.json is read by an external tool that never touches the
-      # Makefile at all. A tag bumped in one place and missed in another does
-      # not fail loudly -- it just means whoever builds locally, opens the
-      # Codespace, or runs this workflow silently gets a different c4o-core
-      # than everyone else. Runs before the pull below so a mismatch is
-      # caught as a config error, not paid for as a wasted image pull.
-      - name: Verify c4o-core image version is pinned consistently
-        run: |
-          python3 -c "
-          import json, os, re, sys
-
-          def read(path):
-              # A file that is not here is a file somebody removed on purpose --
-              # dropping .devcontainer/ is a reasonable thing to do with a
-              # template. Only the pins that are still here have to agree.
-              return open(path).read() if os.path.exists(path) else None
-
-          def matched(pattern, text):
-              m = re.search(pattern, text, re.M)
-              return m.group(1) if m else None
-
-          values = {}
-
-          makefile = read('Makefile')
-          if makefile is not None:
-              values['Makefile'] = matched(r'^C4O_IMAGE\s*:=\s*(\S+)', makefile)
-
-          workflow = read('.github/workflows/verify.yml')
-          if workflow is not None:
-              values['.github/workflows/verify.yml'] = matched(
-                  r'docker pull (ghcr\.io/\S+/c4o-core:\S+)', workflow)
-
-          devcontainer = read('.devcontainer/devcontainer.json')
-          if devcontainer is not None:
-              # devcontainer.json is JSONC; strip the line comments first.
-              stripped = re.sub(r'^\s*//.*\$', '', devcontainer, flags=re.M)
-              values['.devcontainer/devcontainer.json'] = json.loads(stripped).get('image')
-
-          # Present but unreadable means this step went stale, not that the pins
-          # disagree. Name the file rather than leaving a traceback nothing
-          # points anyone at.
-          for path, value in values.items():
-              if value is None:
-                  print(path + ': found no c4o-core image reference.')
-                  print('If you renamed or moved it, this step has to be updated too.')
-                  sys.exit(1)
-
-          if len(set(values.values())) > 1:
-              print('c4o-core image reference is inconsistent:')
-              for path in values:
-                  print('  ' + path + ': ' + values[path])
-              sys.exit(1)
-          print('c4o-core image reference is consistent: ' + next(iter(values.values())))
-          "
-
-      - name: Pull c4o-core Image
-        run: docker pull ghcr.io/anlit75/c4o-core:2.15
-
-      # The devcontainer runs as a named user so that files it creates on a
-      # Linux host stay owned by the host user. That user comes from the base
-      # image rather than from our Dockerfile, so assert it is really there --
-      # otherwise a future c4o-core rebuild breaks the devcontainer silently,
-      # in a way no other step here would catch.
-      - name: Verify the devcontainer user exists in its image
-        run: |
-          # devcontainer.json is JSONC, so strip line comments before parsing.
-          set -- $(python3 -c "
-          import json, re
-          src = open('.devcontainer/devcontainer.json').read()
-          d = json.loads(re.sub(r'^\s*//.*$', '', src, flags=re.M))
-          print(d['image'], d['remoteUser'])
-          ")
-          echo "image=$1 remoteUser=$2"
-          docker run --rm --entrypoint id "$1" -u "$2"
-
-      - name: 1. Lint Check
-        run: make lint
-
-      - name: 2. Simulation
-        run: make sim
-
-      # Cheap -- the tests run in well under a second -- so unlike the
-      # gate-level step below, this one runs on pull requests too.
-      #
-      # Skipped when config.yaml does not ask for Python testbenches. This is
-      # a template: somebody putting their own design in it may only want
-      # Verilog tests, and a starter kit whose CI goes red for a test kind you
-      # never opted into is a starter kit you abandon. The key's presence is
-      # the opt-in; if it IS there and matches no files, `make cocotb` fails,
-      # which is correct -- you asked for something that is not there.
-      - name: 2b. cocotb Tests
-        run: |
-          if ! grep -q '^"//COCOTB_TESTS":' config.yaml; then
-            echo "config.yaml has no //COCOTB_TESTS -- no Python testbenches to run."
-            exit 0
-          fi
-          # Kept, because the gate-level step compares its own verdicts against
-          # this run's rather than against a number written in this file.
-          mkdir -p build
-          set -o pipefail
-          make cocotb 2>&1 | tee build/cocotb-rtl.log
+      # Lint, the Verilog testbench, the pyuvm tests against the RTL (their
+      # output is kept in build/cocotb-rtl.log for the gate-level step below),
+      # synthesis and the schematic.
+      - name: Fast checks
+        uses: anlit75/c4o-core/actions/checks@v2
 
       # test/uart_ral.py is generated from regs/apb_uart.rdl and committed, so a
       # fresh clone can run the tests. Committing generated code buys that and
@@ -193,20 +129,8 @@ jobs:
           fi
           echo "test/uart_ral.py is byte-identical to what make ral produces."
 
-      - name: 3. Logic Synthesis
-        run: make synth
-
-      # Cheap, like the cocotb step: yosys stops after proc and opt, so this
-      # is under a second even though `make gds` below is three minutes.
-      - name: 3b. Schematic
-        run: |
-          make schematic
-          ls -lh build/schematic.svg
-          grep -qF "<svg" build/schematic.svg || { echo "not an SVG"; exit 1; }
-
-      - name: 4. Physical Design (GDSII)
-        # This step will automatically trigger 'make pdk' first
-        run: make gds
+      - name: Physical design
+        uses: anlit75/c4o-core/actions/gds@v2
 
       # config.yaml turns ERROR_ON_SYNTH_CHECKS off, because the DUT's register
       # file has eight dead self-looping bits that would otherwise stop the flow
@@ -239,29 +163,6 @@ jobs:
           }
           echo "8 pre-synthesis loops, all regs_q[7:0]; nothing left after opt."
 
-      # Matched rather than named. `make gds` names its output after DESIGN_NAME
-      # in config.yaml, so hardcoding "blinky" meant the first thing anyone does
-      # with this template -- put their own design in it -- broke CI, on a line
-      # nothing points them at.
-      - name: Verify GDS Output
-        run: |
-          shopt -s nullglob
-          gds=(build/*.gds)
-          if [ ${#gds[@]} -eq 0 ]; then
-            echo "Error: make gds produced no .gds in build/"
-            exit 1
-          fi
-          for f in "${gds[@]}"; do
-            [ -s "$f" ] || { echo "Error: $f is empty"; exit 1; }
-          done
-          ls -lh "${gds[@]}"
-
-      # The render is what `report`'s layout row points at and what the
-      # artifact step below uploads. Both degrade to silence when it is
-      # missing: if-no-files-found stays on 'warn' so that a failed `make gds`
-      # does not produce a second, misleading red step -- which also means an
-      # upload of nothing would look green. So assert it here instead, where
-      # `make gds` has just succeeded and a missing render is a real problem.
       # `make report` says "setup slack -0.75 ns (24 violations)" and nothing
       # says which paths. LibreLane wrote them down -- per corner, inside the
       # STA step's directory -- but nothing points anyone at that, so a timing
@@ -314,16 +215,6 @@ jobs:
           done
           echo "Timing closes:$setup /$hold"
 
-      - name: Verify the layout render exists
-        run: |
-          shopt -s nullglob
-          png=(runs/*/final/render/*.png)
-          if [ ${#png[@]} -eq 0 ]; then
-            echo "Error: the flow drew no layout render under runs/*/final/render/"
-            exit 1
-          fi
-          ls -lh "${png[@]}"
-
       # The point of this repository, in one step: the same three pyuvm tests
       # that ran against the RTL in step 2b, run again against the gates that
       # `make gds` just produced. Not a second testbench -- the same Python.
@@ -374,145 +265,60 @@ jobs:
             exit 1
           fi
 
-      # Gate-level simulation of the netlist the step above just produced.
+      # "Block diagram" is this repository's own section of the results page;
+      # the action checks the ones every flow gives.
+      - name: Report
+        id: report
+        uses: anlit75/c4o-core/actions/report@v2
+        with:
+          sections: Block diagram
+
+      # docs/guide.md, "Iterating without re-running the whole flow", gives one
+      # command for resuming from floorplan. Nothing ran the command it used to
+      # give, and it had stopped working three separate ways with every other
+      # step here green. So run it, and check what that section says: the
+      # resume needs the state file it names, synthesis is not redone, and the
+      # resumed steps are added after the old ones.
       #
-      # Push-only, and a step rather than a job: it needs that netlist, so it
-      # could not run in parallel anyway, and keeping it here avoids shipping
-      # the whole build/ directory through the artifact store to get at it.
+      # Last among the flow steps, so a failure here does not hide theirs, and
+      # so the steps above read a run directory with one of each step.
       #
-      # Not on pull requests. blinky's led toggles once every 2**25 cycles and
-      # the netlist has no WIDTH left to shrink, so this costs ~4 minutes --
-      # measured here, not guessed. Paying that on every review round trip buys
-      # little: the netlist only changes when the RTL or the flow does, and
-      # merging to main catches that before any tag is cut.
-      #
-      # Phrased as "not a pull request" rather than "is a push" so that
-      # workflow_dispatch runs it too -- that is the way to exercise a branch's
-      # gate-level simulation before merging it, without paying for it on every
-      # review round trip.
-      #
-      # Skipped when config.yaml does not ask for it, for the reason the
-      # cocotb step gives -- and more so here: a gate-level testbench cannot
-      # reuse the RTL one's trick of shrinking the design through a parameter,
-      # so it is the hardest file in this repo to write. Requiring it of
-      # everyone who pushes their own design would mean red CI on their first
-      # push, for a test they were never told was mandatory.
-      - name: 5. Gate-Level Simulation
+      # Not on pull requests, for the reason the gate-level step gives: it runs
+      # the flow from floorplan a second time, and the command only changes
+      # when the Makefile or the LibreLane pin does. Phrased the same way, so
+      # workflow_dispatch exercises it on a branch before merging.
+      - name: Resuming from floorplan works, as the guide says it does
         if: github.event_name != 'pull_request'
-        timeout-minutes: 15
         run: |
-          if ! grep -q '^"//GATE_TESTS":' config.yaml; then
-            echo "config.yaml has no //GATE_TESTS -- no gate-level testbench to run."
-            exit 0
+          shopt -s nullglob
+          netlists=(runs/*/*-yosys-synthesis/*.nl.v)
+          states=(runs/*/*-openroad-floorplan/state_in.json)
+          if [ ${#netlists[@]} -ne 1 ] || [ ${#states[@]} -ne 1 ]; then
+            echo "::error::Expected one synthesis step and one floorplan step under runs/ before resuming, found ${#netlists[@]} and ${#states[@]}. make gds did not start from an empty run."
+            exit 1
           fi
-          make gatesim
+          before=$(stat -c %Y "${netlists[0]}")
 
-      # One page with what `make report` prints, the layout, the schematic and
-      # the cocotb verdicts. Built on every run, pull requests included, so a
-      # change that breaks the page is caught before it reaches main.
-      - name: Build the results page
-        run: |
-          make site
-          ls -lh build/site/
-          # After make gds these four come from the run's own reports. Each is
-          # left out silently when its report is missing, so a LibreLane
-          # upgrade that moved one would otherwise just shrink the page.
-          # This design is five blocks and its config asks for a waveform, so
-          # both of those are required here too.
-          for section in "Signoff checks" "Worst setup path" "Area" "Power" \
-                         "Waveform" "Block diagram"; do
-            grep -qF "<h2>$section</h2>" build/site/index.html \
-              || { echo "The results page has no '$section' section."; exit 1; }
-          done
-          # The page names the commit it was built from, so a published page
-          # can always say which run it shows. c4o-core only writes that line
-          # when GITHUB_* reach it, and they reach it only if `make site`
-          # passes them into the container -- for a long time it did not.
-          grep -qF "/commit/$GITHUB_SHA" build/site/index.html \
-            || { echo "::error::The results page does not link commit $GITHUB_SHA. make site has to pass GITHUB_* into the container."; exit 1; }
+          make gds LIBRELANE_ARGS="--from OpenROAD.Floorplan --with-initial-state ${states[0]}"
 
-      # Only main is published, and only when the repository has Pages set to
-      # "GitHub Actions". A copy of this template starts with Pages off, and
-      # turning it on is a setting no workflow token can change -- so off is
-      # a notice, not a red run. An answer that is neither yes nor no fails,
-      # because a silently unpublished page is the failure this step exists
-      # to rule out. README, "Commands".
-      - name: Is GitHub Pages set to publish from Actions?
-        id: pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          code=$(curl -sS -o pages.json -w '%{http_code}' \
-            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pages")
-          case "$code" in
-            200)
-              build_type=$(python3 -c "import json; print(json.load(open('pages.json')).get('build_type'))")
-              if [ "$build_type" = workflow ]; then
-                echo "publish=true" >> "$GITHUB_OUTPUT"
-              else
-                echo "::notice::GitHub Pages publishes from a branch here (build_type: $build_type), so the results page was not published. Settings > Pages > Source: GitHub Actions publishes it."
-              fi ;;
-            404)
-              echo "::notice::GitHub Pages is off for this repository, so the results page was not published. Settings > Pages > Source: GitHub Actions turns it on." ;;
-            *)
-              echo "Asking GitHub whether Pages is on returned HTTP $code:"
-              cat pages.json
-              exit 1 ;;
-          esac
+          after=$(stat -c %Y "${netlists[0]}")
+          synth=(runs/*/*-yosys-synthesis)
+          if [ "$before" != "$after" ] || [ ${#synth[@]} -ne 1 ]; then
+            echo "::error::The guide says resuming from floorplan does not redo synthesis. It was redone:"
+            ls -ld --time-style=full-iso "${synth[@]}" "${netlists[0]}"
+            exit 1
+          fi
+          floorplans=(runs/*/*-openroad-floorplan)
+          if [ ${#floorplans[@]} -ne 2 ]; then
+            echo "::error::The guide says the resumed steps are added after the old ones. Expected two floorplan directories, found ${#floorplans[@]}:"
+            printf '  %s\n' "${floorplans[@]}"
+            exit 1
+          fi
+          echo "  resumed from floorplan: synthesis kept, resumed steps added after the old ones"
 
-      - name: Upload the results page
-        if: steps.pages.outputs.publish == 'true'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: build/site
-
-      # The schematic on its own, for the same reason the layout render gets
-      # one below: it is a small file people actually want to open, and it is
-      # otherwise only inside the ~10MB bundle. Its existence is already
-      # asserted in step 3b, so 'warn' here cannot hide a missing file.
-      - name: Upload the schematic
+      - name: Upload
         if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: schematic
-          path: build/schematic.svg
-          if-no-files-found: warn
-          retention-days: 5
-
-      # The layout image on its own, because the bundle below is ~10MB and
-      # this is the one file in it anyone wants to look at. `report` prints
-      # its path; this makes it one click from the run summary instead.
-      - name: Upload the layout render
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: layout
-          path: runs/*/final/render/*.png
-          if-no-files-found: warn
-          retention-days: 5
-
-      # runs/ is no longer inside build/, so name both or the run itself --
-      # every log, netlist and report the flow produced -- stops being kept.
-      - name: Upload Artifacts
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: chipforall-build-artifacts
-          path: |
-            build/
-            runs/
-          retention-days: 5
-
-      # A v* tag publishes the GDS that the steps above just verified.
-      - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v3
-        with:
-          # A glob, for the same reason the verify step above uses one.
-          files: build/*.gds
-          generate_release_notes: true
+        uses: anlit75/c4o-core/actions/upload@v2
 
   # Publishes the page full-flow built. A job of its own because deploying to
   # Pages needs an OIDC token and the github-pages environment, and neither

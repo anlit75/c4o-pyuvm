@@ -173,19 +173,24 @@ time 是
 
 ## 不重跑整條流程
 
-floorplan 相關的參數 —— `FP_CORE_UTIL`、die 的大小、擺放 —— 不需要重做合成：
+floorplan 相關的參數 —— `FP_CORE_UTIL`、die 的大小、擺放 —— 不需要重做合成。用 LibreLane
+自己的旗標，從 floorplan 恢復上次的執行：
 
 ```bash
-make gds LIBRELANE_ARGS="--last-run --from floorplan"
+make gds LIBRELANE_ARGS="--from OpenROAD.Floorplan --with-initial-state runs/apb_uart_sv_run/13-openroad-floorplan/state_in.json"
 ```
 
-它會從 `runs/` 讀上一次的執行結果，這也是 `make clean` 不動那個目錄、而 `make distclean`
-才會刪掉它的原因。
+`--with-initial-state` 指的是那個步驟上次收到的狀態：它目錄裡的 `state_in.json`。沒有它，
+LibreLane 會從已經做完的設計開始，流程會失敗。這個指令會從 `runs/` 讀上一次的執行結果，這
+也是 `make clean` 不動那個目錄、而 `make distclean` 才會刪掉它的原因。
+
+恢復後重跑的步驟會接在舊步驟後面，所以在下一次完整執行之前，執行目錄裡每個步驟都有兩份。
+不加 `--from` 的 `make gds` 是完整執行，它從空的執行目錄開始。
 
 **`CLOCK_PERIOD` 不在裡面**，而這件事在這個 repo 特別重要，因為它就是這個設計時序的關
 鍵。時脈是合成的輸入，合成會依它挑元件尺寸、插 buffer，所以從 floorplan 恢復的話，你量
 到的是「**舊**週期合成出來的閘，在新週期下的 timing」。[時序與 constraint](#時序與-constraint)
-裡那個 90.9 MHz 就是為了這個理由、用乾淨重跑量出來的。
+裡那個 90.9 MHz 就是為了這個理由、用完整重跑量出來的。
 
 ## 看電路
 

@@ -191,20 +191,27 @@ directly instead, so a *new* loop still fails the build.
 ## Iterating without re-running the whole flow
 
 Floorplan parameters — `FP_CORE_UTIL`, the die, the placement — do not need
-synthesis redone:
+synthesis redone. Resume the last run from floorplan with LibreLane's own flags:
 
 ```bash
-make gds LIBRELANE_ARGS="--last-run --from floorplan"
+make gds LIBRELANE_ARGS="--from OpenROAD.Floorplan --with-initial-state runs/apb_uart_sv_run/13-openroad-floorplan/state_in.json"
 ```
 
-That reads the previous run out of `runs/`, which is why `make clean` leaves that
-directory alone and `make distclean` is the one that removes it.
+`--with-initial-state` names the state that step was given last time: the
+`state_in.json` in its directory. Without it LibreLane starts from the finished
+design, and the flow fails. The command reads the previous run out of `runs/`,
+which is why `make clean` leaves that directory alone and `make distclean` is the
+one that removes it.
+
+The resumed steps are added after the old ones, so the run directory holds two of
+each until the next full run. `make gds` without `--from` is a full run, and it
+starts from an empty run directory.
 
 **`CLOCK_PERIOD` is not one of them**, which matters here because it is the key
 this design's timing turns on. The clock is an input to synthesis, which sizes
 cells and inserts buffers against it, so resuming from floorplan measures the
 gates the *old* period produced under the new one. The 90.9 MHz in
-[Constraints](#constraints) came from clean runs for that reason.
+[Constraints](#constraints) came from full runs for that reason.
 
 ## Seeing the circuit
 

@@ -3,33 +3,51 @@
 
 # Image Configuration
 #
-# Pinned to the minor, not the patch. c4o-core publishes 2.15.0, 2.15, 2 and
-# latest for every release; 2.15 means a fix reaches you without anybody editing
-# this line -- for as long as 2.15 is c4o-core's newest minor. Only the newest
-# minor gets fixes, so once 2.16 is out this line has to move to keep getting
-# them. A new behaviour never arrives unannounced. Pin 2.15.0 instead if you
+# Pinned to the minor, not the patch. c4o-core publishes 2.16.0, 2.16, 2 and
+# latest for every release; 2.16 means a fix reaches you without anybody editing
+# this line -- for as long as 2.16 is c4o-core's newest minor. Only the newest
+# minor gets fixes, so once 2.17 is out this line has to move to keep getting
+# them. A new behaviour never arrives unannounced. Pin 2.16.0 instead if you
 # want a byte-identical image forever, and remember that you then also own
 # noticing its fixes.
 #
-# Three files carry this version -- here, .devcontainer/devcontainer.json, and
-# the docker pull in .github/workflows/verify.yml. CI refuses to continue when
-# they disagree, so change all three together.
-C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.15
+# Two files carry this version -- here and .devcontainer/devcontainer.json. CI
+# refuses to continue when they disagree, so change both together. The workflow
+# reads the image name from this line.
+C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.16
 LIBRELANE_IMAGE := ghcr.io/librelane/librelane:3.0.14
 
-# Extra flags for the LibreLane run. The reason this exists is iteration: a
-# full flow is three minutes, and most of what you change after the first one
-# -- FP_CORE_UTIL, the floorplan -- does not need synthesis redone. CLOCK_PERIOD
-# is not one of them: the clock is an input to synthesis, so resuming from
-# floorplan measures the old gates under the new period. See docs/guide.md,
-# "Iterating without re-running the whole flow".
-#
-#   make gds LIBRELANE_ARGS="--last-run --from floorplan"
-#
-# --last-run is why runs/ is left where LibreLane put it; see the gds target.
+# Extra flags for the LibreLane run, passed through as they are.
 LIBRELANE_ARGS ?=
 DESIGN_NAME := $(shell grep -E '^DESIGN_NAME:' config.yaml | sed -e 's/^DESIGN_NAME:[[:space:]]*//' -e 's/["'"'"']//g')
 PWD := $(shell pwd)
+
+# A full run starts empty: --overwrite removes the previous run. LibreLane's
+# default is to append to a run that exists, so a second `make gds` used to
+# leave two of every step directory under the same tag.
+#
+# Not when LIBRELANE_ARGS names a step to start from. That is LibreLane's own
+# resume, and it needs the previous run to still be there:
+#
+#   make gds LIBRELANE_ARGS="--from OpenROAD.Floorplan --with-initial-state <file>"
+#
+# where <file> is the state_in.json in that step's directory of the last run,
+# runs/<tag>/13-openroad-floorplan/state_in.json for the example. The resumed
+# steps are appended after the old ones, numbered on from the last.
+#
+# Most of what you change after the first flow -- FP_CORE_UTIL, the floorplan --
+# does not need synthesis redone. CLOCK_PERIOD is not one of those changes: the
+# clock is an input to synthesis, so resuming from floorplan measures the old
+# gates under the new period. See docs/guide.md, "Iterating without re-running
+# the whole flow".
+#
+# Measured on LibreLane 3.0.14: --last-run cannot be used here, because it and
+# --run-tag are mutually exclusive; the step is 'OpenROAD.Floorplan', not
+# 'floorplan'; and without --with-initial-state LibreLane starts from the state
+# of the finished design, and CTS crashes on it.
+ifeq ($(filter --from --from=% -F --only --only=%,$(LIBRELANE_ARGS)),)
+	LIBRELANE_OVERWRITE := --overwrite
+endif
 
 # Where the Sky130 PDK lives on the host. One copy is 3GB and every checkout
 # needs the same one, so a machine with several -- a lab, a teaching account --
@@ -114,7 +132,8 @@ help:
 	@echo "  make distclean - Remove build/ and runs/"
 	@echo ""
 	@echo "  Re-run part of the flow after the first full one:"
-	@echo "    make gds LIBRELANE_ARGS=\"--last-run --from floorplan\""
+	@echo "    make gds LIBRELANE_ARGS=\"--from OpenROAD.Floorplan --with-initial-state <state_in.json>\""
+	@echo "    (see docs/guide.md, Iterating without re-running the whole flow)"
 
 # --- The DUT is generated, and the generated file is committed ---
 
@@ -266,15 +285,15 @@ gds:
 		-u $(shell id -u):$(shell id -g) \
 		$(LIBRELANE_IMAGE) \
 		python3 -m librelane --manual-pdk --pdk-root /pdks \
-			$(LIBRELANE_ARGS) \
+			$(LIBRELANE_OVERWRITE) $(LIBRELANE_ARGS) \
 			--run-tag $(DESIGN_NAME)_run config.yaml
 	@echo "🟢 Post-processing..."
 	# Copy the final GDS to the build folder
 	cp runs/$(DESIGN_NAME)_run/final/gds/$(DESIGN_NAME).gds build/$(DESIGN_NAME).gds
 	# runs/ stays where LibreLane put it. Moving it into build/ used to look
-	# tidier, and it silently broke --last-run: LibreLane looks for a previous
-	# run in runs/, and there was never one there. c4o-core's report and
-	# gatesim already search both locations, so nothing else cared.
+	# tidier, and it silently broke resuming: LibreLane looks for the run under
+	# runs/, and there was never one there. c4o-core's report and gatesim
+	# already search both locations, so nothing else cared.
 
 	@# The flow just measured area, timing and power. Show them rather than
 	@# leaving them in a 300-key metrics.json under runs/.
