@@ -45,7 +45,7 @@ netlist — the same Python, the same scoreboard, the same register model:
 
 ```bash
 make gds          # produces the netlist
-make cocotb-gl    # runs the same tests against it
+make gatesim      # runs the same tests against it
 ```
 
 That works only because nothing in `test/` touches anything but the top-level
@@ -72,7 +72,7 @@ cd c4o-pyuvm
 make all          # lint, Verilog sim, the pyuvm tests, synthesis — seconds
 make gds          # the physical flow: minutes, plus ~3GB of PDK the first time
 make report       # area, timing, power, signoff
-make cocotb-gl    # the same tests, on the gates
+make gatesim      # the same tests, on the gates
 ```
 
 Needs Docker, Make and Git — or none of them: open it in a GitHub Codespace.
@@ -104,7 +104,7 @@ because neither yosys nor Icarus reads the original. `make rtl` regenerates it.
 | `make lint` | Verilator lint | terminal |
 | `make sim` | the Verilog smoke test | `build/tb_apb_uart.vcd` |
 | `make cocotb` | the pyuvm tests against the RTL | `build/cocotb-results.xml` |
-| `make cocotb-gl` | the same tests against the netlist (after `make gds`) | `build/cocotb-gl-results.xml` |
+| `make gatesim` | the same tests against the netlist (after `make gds`) | `build/cocotb-gl-results.xml` |
 | `make rtl` | regenerate `src/apb_uart_sv.v` from `src/vendor/` | `src/apb_uart_sv.v` |
 | `make ral` | regenerate `test/uart_ral.py` from `regs/apb_uart.rdl` | `test/uart_ral.py` |
 | `make synth` | Yosys synthesis | `build/synthesis.json` |

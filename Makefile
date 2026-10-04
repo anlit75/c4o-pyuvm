@@ -3,18 +3,18 @@
 
 # Image Configuration
 #
-# Pinned to the minor, not the patch. c4o-core publishes 2.17.0, 2.17, 2 and
-# latest for every release; 2.17 means a fix reaches you without anybody editing
-# this line -- for as long as 2.17 is c4o-core's newest minor. Only the newest
-# minor gets fixes, so once 2.18 is out this line has to move to keep getting
-# them. A new behaviour never arrives unannounced. Pin 2.17.0 instead if you
+# Pinned to the minor, not the patch. c4o-core publishes 2.18.0, 2.18, 2 and
+# latest for every release; 2.18 means a fix reaches you without anybody editing
+# this line -- for as long as 2.18 is c4o-core's newest minor. Only the newest
+# minor gets fixes, so once 2.19 is out this line has to move to keep getting
+# them. A new behaviour never arrives unannounced. Pin 2.18.0 instead if you
 # want a byte-identical image forever, and remember that you then also own
 # noticing its fixes.
 #
 # Two files carry this version -- here and .devcontainer/devcontainer.json. CI
 # refuses to continue when they disagree, so change both together. The workflow
 # reads the image name from this line.
-C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.17
+C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.18
 LIBRELANE_IMAGE := ghcr.io/librelane/librelane:3.0.14
 
 # --- From here down this file is c4o-core's stub.mk. Do not edit it. ---
@@ -53,12 +53,11 @@ endif
 endif
 include $(C4O_RULES)
 
-.PHONY: rtl ral cocotb-gl
+.PHONY: rtl ral
 
 help::
 	@echo "  make rtl     - Regenerate src/apb_uart_sv.v from the vendored SystemVerilog"
 	@echo "  make ral     - Regenerate test/uart_ral.py from regs/apb_uart.rdl"
-	@echo "  make cocotb-gl - Run the same tests against the netlist (after make gds)"
 
 # --- The DUT is generated, and the generated file is committed ---
 
@@ -118,13 +117,3 @@ rtl:
 ral:
 	@echo "🟢 peakrdl pyuvm: regs/apb_uart.rdl -> test/uart_ral.py"
 	$(call c4o_tool,peakrdl) pyuvm regs/apb_uart.rdl -o test/uart_ral.py
-
-# The same tests again, against the gates. Not a different testbench: the exact
-# same three tests, the exact same Python, driving runs/<tag>/final/nl/ instead
-# of src/. That only works because nothing in test/ touches anything but the
-# top-level ports -- reach inside the design and this target is where you find
-# out, with an AttributeError naming the net that synthesis removed.
-#
-# Needs `make gds` first, for the netlist.
-cocotb-gl:
-	$(C4O_COCOTB) cocotb --netlist

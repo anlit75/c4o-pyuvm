@@ -37,7 +37,7 @@ Python、同一個 scoreboard、同一個暫存器模型：
 
 ```bash
 make gds          # 產出 netlist
-make cocotb-gl    # 拿同一份測試去跑它
+make gatesim      # 拿同一份測試去跑它
 ```
 
 這只有在 `test/` 裡沒有任何東西碰到 top-level port 以外的訊號時才成立。netlist 裡所有
@@ -60,7 +60,7 @@ cd c4o-pyuvm
 make all          # lint、Verilog 模擬、pyuvm 測試、合成 —— 幾秒鐘
 make gds          # 物理流程：幾分鐘，第一次還要抓約 3GB 的 PDK
 make report       # 面積、時序、功耗、signoff
-make cocotb-gl    # 同一份測試，跑在 gate 上
+make gatesim      # 同一份測試，跑在 gate 上
 ```
 
 需要 Docker、Make、Git —— 或者一個都不用：用 GitHub Codespace 打開。
@@ -91,7 +91,7 @@ make cocotb-gl    # 同一份測試，跑在 gate 上
 | `make lint` | Verilator lint | 終端機 |
 | `make sim` | Verilog 煙霧測試 | `build/tb_apb_uart.vcd` |
 | `make cocotb` | pyuvm 測試對 RTL | `build/cocotb-results.xml` |
-| `make cocotb-gl` | 同一份測試對 netlist（要先 `make gds`） | `build/cocotb-gl-results.xml` |
+| `make gatesim` | 同一份測試對 netlist（要先 `make gds`） | `build/cocotb-gl-results.xml` |
 | `make rtl` | 從 `src/vendor/` 重新生成 `src/apb_uart_sv.v` | `src/apb_uart_sv.v` |
 | `make ral` | 從 `regs/apb_uart.rdl` 重新生成 `test/uart_ral.py` | `test/uart_ral.py` |
 | `make synth` | Yosys 合成 | `build/synthesis.json` |
