@@ -30,17 +30,6 @@ VERILOG_FILES:
 # preview when the page is shared.
 "//DESCRIPTION": "A 16550-style UART verified with pyuvm: APB agent, scoreboard and a SystemRDL register model, on RTL and gates, to GDS."
 
-# What the results page (`make site`) draws from the smoke test's VCD: the APB
-# writes that configure the UART and send 0xA5, the status reads, and the
-# serial line carrying the byte.
-"//WAVE_SIGNALS":
-  - tb_apb_uart.PSEL
-  - tb_apb_uart.PWRITE
-  - tb_apb_uart.PADDR
-  - tb_apb_uart.PWDATA
-  - tb_apb_uart.PRDATA
-  - tb_apb_uart.serial
-
 CLOCK_PORT: CLK
 
 # 90.9 MHz, not 100. Required time is

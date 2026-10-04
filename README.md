@@ -111,13 +111,15 @@ because neither yosys nor Icarus reads the original. `make rtl` regenerates it.
 | `make schematic` | the circuit as an SVG | `build/schematic.svg` |
 | `make gds` | the physical layout, via LibreLane | `build/apb_uart_sv.gds` |
 | `make report` | area, timing, power and signoff from the last `make gds` | terminal |
-| `make site` | `report`, signoff checks, the worst setup path, area and power splits, the layout, the block diagram, the schematic, the `make sim` waveform and both cocotb runs on one page | `build/site/index.html` |
+| `make site` | the layout, test verdicts, timing with its constraints, area and instances, power, signoff checks and both cocotb runs on one page | `build/site/index.html` |
 | `make shell` | a shell inside the c4o-core container | — |
 | `make clean` | remove `build/`, keep `runs/` | — |
 | `make distclean` | remove `build/` and `runs/` | — |
 
 `make cocotb SEED=<n>` replays a random failure. The payloads are logged, so a red
 CI run gives you both the seed and the bytes.
+
+`make cocotb WAVES=1` also writes `build/apb_uart_sv.vcd`. `make sim` writes its own `build/tb_apb_uart.vcd`.
 
 CI builds the `make site` page on every run and publishes it from `main` to
 GitHub Pages, once **Settings → Pages → Source** is set to **GitHub Actions**.

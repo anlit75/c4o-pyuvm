@@ -230,9 +230,6 @@ jobs:
           done
           echo "Timing closes:$setup /$hold"
 
-      # "Block diagram" is this repository's own section of the results page;
-      # the action checks the ones every flow gives.
-      #
       # The action also runs the same pyuvm tests again against the gates that
       # `make gds` produced, and fails unless the summary line matches the RTL
       # run's. Not a second testbench -- the same Python. If a test reaches
@@ -240,8 +237,6 @@ jobs:
       - name: Report
         id: report
         uses: anlit75/c4o-core/actions/report@v2
-        with:
-          sections: Block diagram
 
       # docs/guide.md, "Iterating without re-running the whole flow", gives one
       # command for resuming from floorplan. Nothing ran the command it used to
