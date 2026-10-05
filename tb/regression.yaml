@@ -1,0 +1,20 @@
+# The test list for `make regress`: one compile, then one simulation for each
+# entry and seed. `make coverage` runs the same list and merges the counters.
+#
+# `test` is a module of "//COCOTB_TESTS", or <module>.<function> for one test.
+# `seeds` is how many seeds that entry runs, and defaults to 1.
+#
+# A failed run prints the command that replays it, for example
+#   make cocotb SEED=<seed> TEST=test_uart.random_bytes
+# Each entry runs one module, so the replay is exact. test_uart.py builds its
+# payloads when it is imported, and the seed fixes them.
+
+# Twenty random bytes, one at a time, so the FIFO pointers wrap. This is the
+# test that random traffic is for, so it gets the seeds.
+- test: test_uart.random_bytes
+  seeds: 10
+
+# The whole module, one seed: the loopback byte, the random bytes and the burst.
+- test: test_uart
+
+- test: test_ral

@@ -10,21 +10,25 @@
 DESIGN_NAME: apb_uart_sv
 
 # The generated Verilog, not the SystemVerilog it came from. `make rtl` writes
-# it; src/vendor/apb_uart_sv/README.md says why it is committed. A glob does not
+# it; rtl/vendor/apb_uart_sv/README.md says why it is committed. A glob does not
 # work here: LibreLane validates each entry as a literal path.
 VERILOG_FILES:
-  - dir::src/apb_uart_sv.v
+  - dir::rtl/apb_uart_sv.v
 
 # Simulation only -- LibreLane has no testbench variable, since simulation sits
 # outside an RTL-to-GDSII flow.
 "//TEST_FILES":
-  - dir::test/*.v
+  - dir::tb/*.v
 
 # The pyuvm tests. cocotb finds them by module name, so only the files that
 # define @cocotb.test() go here -- apb_agent.py and uart_env.py are imported by
 # them, from the same directory, which c4o-core puts on PYTHONPATH.
 "//COCOTB_TESTS":
-  - dir::test/test_*.py
+  - dir::tb/test_*.py
+
+# The test list for `make regress`: which tests to run over how many seeds.
+# `make coverage` merges its counters over the same runs.
+"//REGRESSION": dir::tb/regression.yaml
 
 # One line under the title of the results page (`make site`) and in its link
 # preview when the page is shared.
@@ -90,7 +94,7 @@ LINTER_DISABLE_WARNINGS_BLACKBOX: [UNDRIVEN, UNUSEDSIGNAL, TIMESCALEMOD]
 # eight are the same dead register:
 #
 #   Warning: found logic loop in module apb_uart_sv:
-#       cell $procdff$1552 ($aldff) source: src/apb_uart_sv.v:229.2-249.6
+#       cell $procdff$1552 ($aldff) source: rtl/apb_uart_sv.v:229.2-249.6
 #         AD[0] --> Q[0]
 #
 # regs_q is ten bytes of register file. The asynchronous reset assigns nine of

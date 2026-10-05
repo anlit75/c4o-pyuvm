@@ -8,10 +8,10 @@ testbench 怎麼搭的，以及從程式碼看不出來的那些決定。這個 
 ## 環境
 
 ```
-test/apb_agent.py   ApbTxn、driver、monitor、agent、暫存器 adapter
-test/uart_env.py    環境、scoreboard、測試基底類別
-test/test_uart.py   資料路徑測試
-test/test_ral.py    暫存器測試
+tb/apb_agent.py   ApbTxn、driver、monitor、agent、暫存器 adapter
+tb/uart_env.py    環境、scoreboard、測試基底類別
+tb/test_uart.py   資料路徑測試
+tb/test_ral.py    暫存器測試
 ```
 
 **driver 不是狀態機。** APB3 只有兩個 phase，而這顆 DUT 把 `PREADY` 無條件拉高，所以沒
@@ -72,9 +72,9 @@ coverpoint。這種規模的設計、六個測試，還可以一個一個論證�
 失敗，而且訊息有用：
 
 ```bash
-# 例如在 src/apb_uart_sv.v 裡讓 THR 的寫入掉一個最低位元
+# 例如在 rtl/apb_uart_sv.v 裡讓 THR 的寫入掉一個最低位元
 make cocotb                       # loopback: "sent 0xa5, RBR returned 0xa4"
-git checkout -- src/apb_uart_sv.v
+git checkout -- rtl/apb_uart_sv.v
 ```
 
 其中兩件事值得知道：
@@ -129,7 +129,7 @@ make gds          # 寫出 runs/<tag>/final/nl/
 make gatesim      # 拿同一份測試去驅動它
 ```
 
-**讓它成立的規則只有一條：`test/` 裡不准碰 top-level port 以外的任何東西。** netlist
+**讓它成立的規則只有一條：`tb/` 裡不准碰 top-level port 以外的任何東西。** netlist
 裡所有內部名字都消失了。伸手進去的話，你會在這裡發現，錯誤訊息會指名合成掉的那條線。
 CI 每個 pull request 都跑它就是為了這個，而且只要幾秒。
 
@@ -146,15 +146,26 @@ netlist 一起編譯，而那些 model 帶著 `1ns/1ps`；RTL 自己不帶，所
 CI 裡共用的 report 那一步比對的是兩次執行的 summary 行，而不是寫死在 workflow 裡的數字：同一份測試、同
 樣的判定，兩邊都要一致。
 
+## 多個 seed
+
+```bash
+make regress                                        # tb/regression.yaml 的每個測試，各跑它的 seed
+make cocotb SEED=<n> TEST=test_uart.random_bytes    # 重播一次失敗的執行
+```
+
+`tb/regression.yaml` 列出測試。一個條目是一個模組，或用 `<module>.<function>` 指定單一測試，`seeds` 是它跑幾個 seed。`random_bytes` 跑 10 個 seed，其他條目各跑 1 個。
+
+`make regress` 編譯一次，然後每個條目、每個 seed 各模擬一次。失敗的那次不會讓其他次停下。每個失敗的執行都會印出重播它的 `make cocotb SEED=<n> TEST=<entry>` 指令。重播是精確的，因為每個條目只跑一個模組，而 `test_uart.py` 在被 import 時就用 seed 產生 payload。`make regress SEED=<n>` 用同一個 base seed 重跑整份清單。[完整細節](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#many-seeds-regress)。
+
 ## 程式碼覆蓋率
 
 ```bash
 make coverage     # 同一批測試再跑一次，用 Verilator 加計數器
 ```
 
-`make coverage` 計算三種點：執行過的 block、走過的 branch（`if` 或 `case` 的每一邊）和變過值的訊號位元。結果網頁依種類列出命中的點數和總數，CI 每次都會量。`make all` 不會。
+`make coverage` 計算三種點：執行過的 block、走過的 branch（`if` 或 `case` 的每一邊）和變過值的訊號位元。結果網頁依種類列出命中的點數和總數，CI 每次都會量。`make all` 不會。設了 `"//REGRESSION"` 時，`make coverage` 把計數器合併在清單的每一次執行上。
 
-**數字對應的是 `src/apb_uart_sv.v`**，也就是 `sv2v` 生成的檔案，不是 `src/vendor/` 底下的 SystemVerilog。這裡的 block 是翻譯後的 block。
+**數字對應的是 `rtl/apb_uart_sv.v`**，也就是 `sv2v` 生成的檔案，不是 `rtl/vendor/` 底下的 SystemVerilog。這裡的 block 是翻譯後的 block。
 
 **通過或失敗仍由 `make cocotb` 決定。** 那次執行在 Icarus 上。Verilator 是 2 值模擬，所以 reset 之前是 X 的訊號在那裡讀成 0，同一個測試可能在一個通過、在另一個失敗。Verilator 那次執行失敗，不會讓 `make coverage` 失敗。Verilator 建不起來的設計才會。`make coverage SEED=<n>` 設定 seed，網頁會寫出這次執行用的 seed。[完整細節](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#code-coverage-coverage)。
 
@@ -245,7 +256,8 @@ LibreLane 的 key 都帶 `//` 前綴，它會忽略 —— 這就是讓同一個
 | `DESIGN_NAME` | 頂層模組名稱；其他所有東西都從這裡讀 |
 | `VERILOG_FILES` | 可合成的原始碼。每一項都會被當成字面路徑驗證，`**` 不會展開 |
 | `"//TEST_FILES"` | `make sim` 用的 Verilog testbench。可以用 glob |
-| `"//COCOTB_TESTS"` | `make cocotb` 和 `make gatesim` 用的 Python testbench。只放有 `@cocotb.test()` 的檔案，`test/` 其餘檔案由它們 import |
+| `"//COCOTB_TESTS"` | `make cocotb` 和 `make gatesim` 用的 Python testbench。只放有 `@cocotb.test()` 的檔案，`tb/` 其餘檔案由它們 import |
+| `"//REGRESSION"` | `make regress` 用的 YAML 測試清單：每項有 `test` 和 `seeds` |
 | `"//DESCRIPTION"` | 結果網頁標題下方、以及分享連結預覽裡的一句話：這個設計是什麼 |
 | `CLOCK_PORT` / `CLOCK_PERIOD` | 要約束的時脈，以及它的週期（ns） |
 | `IO_DELAY_CONSTRAINT` | 保留給 port 外部延遲的週期百分比 |
