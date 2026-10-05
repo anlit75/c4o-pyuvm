@@ -40,7 +40,7 @@ make gds          # 產出 netlist
 make gatesim      # 拿同一份測試去跑它
 ```
 
-這只有在 `test/` 裡沒有任何東西碰到 top-level port 以外的訊號時才成立。netlist 裡所有
+這只有在 `tb/` 裡沒有任何東西碰到 top-level port 以外的訊號時才成立。netlist 裡所有
 內部名字都消失了，所以一個偷看內部的 monitor 會在 RTL 上過、在這裡死。
 
 **暫存器圖只有一份。** `regs/apb_uart.rdl`。`make ral` 從它生成 pyuvm 模型，CI 會重新
@@ -68,7 +68,7 @@ make gatesim      # 同一份測試，跑在 gate 上
 ## 受測設計
 
 [pulp-platform/apb_uart_sv](https://github.com/pulp-platform/apb_uart_sv)，一顆
-16550 風格的 UART，原封不動 vendored 在 `src/vendor/`，commit
+16550 風格的 UART，原封不動 vendored 在 `rtl/vendor/`，commit
 `dfad6e04d19cc9481d3cd2750b45b970dc61271b`（Solderpad 0.51）。APB 暫存器解碼、16 byte
 的 TX/RX FIFO、共用除頻值的序列化與解序列化、parity、FIFO trigger level、一個中斷。
 
@@ -80,7 +80,7 @@ make gatesim      # 同一份測試，跑在 gate 上
 | `cfg_stop_bits_i` 在 TX 實例上被註解掉，而 RX 照 `LCR[2]` 走 | `regs/apb_uart.rdl` 的 `STB` 欄位 |
 | 暫存器檔裡 8 個自我迴圈的死位元，它會讓物理流程中止 | `config.yaml`，`ERROR_ON_SYNTH_CHECKS` 旁邊 |
 
-`src/apb_uart_sv.v` 是 `sv2v` 從那份 SystemVerilog 翻出來的 Verilog-2005，因為 yosys
+`rtl/apb_uart_sv.v` 是 `sv2v` 從那份 SystemVerilog 翻出來的 Verilog-2005，因為 yosys
 和 Icarus 都讀不了原檔。`make rtl` 會重新生成它。
 
 ## 指令
@@ -91,10 +91,11 @@ make gatesim      # 同一份測試，跑在 gate 上
 | `make lint` | Verilator lint | 終端機 |
 | `make sim` | Verilog 煙霧測試 | `build/tb_apb_uart.vcd` |
 | `make cocotb` | pyuvm 測試對 RTL | `build/cocotb-results.xml` |
+| `make regress` | `tb/regression.yaml` 裡的測試，每個跑它的 seed | `build/regress/` |
 | `make coverage` | pyuvm 測試跑過的 RTL，用 Verilator 計數 | `build/coverage/` |
 | `make gatesim` | 同一份測試對 netlist（要先 `make gds`） | `build/cocotb-gl-results.xml` |
-| `make rtl` | 從 `src/vendor/` 重新生成 `src/apb_uart_sv.v` | `src/apb_uart_sv.v` |
-| `make ral` | 從 `regs/apb_uart.rdl` 重新生成 `test/uart_ral.py` | `test/uart_ral.py` |
+| `make rtl` | 從 `rtl/vendor/` 重新生成 `rtl/apb_uart_sv.v` | `rtl/apb_uart_sv.v` |
+| `make ral` | 從 `regs/apb_uart.rdl` 重新生成 `tb/uart_ral.py` | `tb/uart_ral.py` |
 | `make synth` | Yosys 合成 | `build/synthesis.json` |
 | `make schematic` | 把電路畫成 SVG | `build/schematic.svg` |
 | `make gds` | 用 LibreLane 做物理 layout | `build/apb_uart_sv.gds` |
@@ -107,7 +108,9 @@ make gatesim      # 同一份測試，跑在 gate 上
 `make cocotb SEED=<n>` 重播一次隨機失敗。payload 會記進 log，所以一次紅掉的 CI 會同時
 告訴你 seed 和那些位元組。
 
-`make coverage` 計算 block、branch 和 toggle 三種點。數字對應的是 `sv2v` 生成的 `src/apb_uart_sv.v`，不是 `src/vendor/`。通過或失敗仍由 `make cocotb` 決定。[指南](docs/guide.zh-TW.md#程式碼覆蓋率)有更多說明。
+`make regress` 執行 `tb/regression.yaml` 這份清單：編譯一次，然後每個測試、每個 seed 各模擬一次。失敗的那次會印出重播指令，例如 `make cocotb SEED=<n> TEST=test_uart.random_bytes`。`make coverage` 把計數器合併在同樣那些執行上。[`make regress` 的更多說明](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#many-seeds-regress)。
+
+`make coverage` 計算 block、branch 和 toggle 三種點。數字對應的是 `sv2v` 生成的 `rtl/apb_uart_sv.v`，不是 `rtl/vendor/`。通過或失敗仍由 `make cocotb` 決定。[指南](docs/guide.zh-TW.md#程式碼覆蓋率)有更多說明。
 
 `make cocotb WAVES=1` 另外寫出 `build/apb_uart_sv.vcd`。`make sim` 寫出自己的 `build/tb_apb_uart.vcd`。
 
@@ -120,14 +123,14 @@ CI 每次都會產生 `make site` 的網頁，並在 **Settings → Pages → So
 ```text
 config.yaml           設計名稱、時脈、constraint —— 連理由一起
 regs/apb_uart.rdl     暫存器圖，以及 SystemRDL 說不出口的事
-src/apb_uart_sv.v     由 make rtl 生成 —— 不要手改
-src/vendor/           別人的 SystemVerilog，原封不動
-test/apb_agent.py     APB3 driver、monitor、agent、暫存器 adapter
-test/uart_env.py      環境、scoreboard、測試基底類別
-test/uart_ral.py      由 make ral 生成 —— 不要手改
-test/test_uart.py     資料路徑，走 DUT 自己的 loopback
-test/test_ral.py      暫存器，透過模型
-test/tb_apb_uart.v    Verilog 煙霧測試
+rtl/apb_uart_sv.v     由 make rtl 生成 —— 不要手改
+rtl/vendor/           別人的 SystemVerilog，原封不動
+tb/apb_agent.py       APB3 driver、monitor、agent、暫存器 adapter
+tb/uart_env.py        環境、scoreboard、測試基底類別
+tb/uart_ral.py        由 make ral 生成 —— 不要手改
+tb/test_uart.py       資料路徑，走 DUT 自己的 loopback
+tb/test_ral.py        暫存器，透過模型
+tb/tb_apb_uart.v      Verilog 煙霧測試
 docs/guide.zh-TW.md   它怎麼運作
 ```
 

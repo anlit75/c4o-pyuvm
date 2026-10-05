@@ -1,16 +1,16 @@
-// The register map of src/vendor/apb_uart_sv/, as that design actually decodes
+// The register map of rtl/vendor/apb_uart_sv/, as that design actually decodes
 // it -- not as the 16550 datasheet describes it. Fields, reset values and access
 // come from the RTL's own decode, which is what makes a reset check worth
 // running.
 //
-// `make ral` turns this into test/uart_ral.py with `peakrdl pyuvm`, so the map
+// `make ral` turns this into tb/uart_ral.py with `peakrdl pyuvm`, so the map
 // and the model the tests use cannot drift apart.
 //
 // Four things about this design cannot be written down in SystemRDL:
 //
 //   1. THR/RBR at 0x0 is not a register. A write pushes into the TX FIFO and a
 //      read pops the RX FIFO, so there is no storage to mirror. It is left out;
-//      the loopback tests in test/test_uart.py verify that path instead. UVM has
+//      the loopback tests in tb/test_uart.py verify that path instead. UVM has
 //      uvm_reg_fifo for FIFO ports, and PeakRDL does not generate it.
 //
 //   2. FCR at 0x2 is write-only and shares its address with the read-only IIR,

@@ -8,10 +8,10 @@ The [README](../README.md) covers what the repository is and how to run it.
 ## The environment
 
 ```
-test/apb_agent.py   ApbTxn, driver, monitor, agent, register adapter
-test/uart_env.py    environment, scoreboard, test base class
-test/test_uart.py   the data-path tests
-test/test_ral.py    the register tests
+tb/apb_agent.py   ApbTxn, driver, monitor, agent, register adapter
+tb/uart_env.py    environment, scoreboard, test base class
+tb/test_uart.py   the data-path tests
+tb/test_ral.py    the register tests
 ```
 
 **The driver is not a state machine.** APB3 has two phases, and this DUT ties
@@ -77,9 +77,9 @@ A test that has never failed is a test nobody has checked. Break the design, run
 the tests, confirm that the one you aimed at fails and says something useful:
 
 ```bash
-# e.g. make the THR write drop its low bit, in src/apb_uart_sv.v
+# e.g. make the THR write drop its low bit, in rtl/apb_uart_sv.v
 make cocotb                       # loopback: "sent 0xa5, RBR returned 0xa4"
-git checkout -- src/apb_uart_sv.v
+git checkout -- rtl/apb_uart_sv.v
 ```
 
 Worth knowing about two of them:
@@ -140,7 +140,7 @@ make gds          # writes runs/<tag>/final/nl/
 make gatesim      # drives it with the same tests
 ```
 
-**One rule makes it work: nothing in `test/` may touch anything but the top-level
+**One rule makes it work: nothing in `tb/` may touch anything but the top-level
 ports.** Every internal name is gone from a netlist. Reach inside and this is where
 you find out, with an `AttributeError` naming the net synthesis removed. CI runs it
 on every pull request for that reason, and it costs a few seconds.
@@ -159,15 +159,26 @@ so an X is a real failure and `int()` raising on it is the behaviour to keep.
 The shared report step in CI compares the two runs' summary lines rather than a count
 written into the workflow: the same tests, the same verdicts, on both.
 
+## Many seeds
+
+```bash
+make regress                                        # every test of tb/regression.yaml, each over its seeds
+make cocotb SEED=<n> TEST=test_uart.random_bytes    # replay one failed run
+```
+
+`tb/regression.yaml` lists the tests. An entry is a module, or `<module>.<function>` for one test, and `seeds` says how many seeds it runs. `random_bytes` runs 10 seeds. The other entries run one.
+
+`make regress` compiles once and runs one simulation for each entry and seed. A failed run does not stop the others. For each failed run it prints the `make cocotb SEED=<n> TEST=<entry>` command that replays it. The replay is exact, because each entry runs one module and `test_uart.py` builds its payloads from the seed when it is imported. `make regress SEED=<n>` reruns the whole list from one base seed. [All the details](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#many-seeds-regress).
+
 ## Code coverage
 
 ```bash
 make coverage     # the same tests again, on Verilator, with counters
 ```
 
-`make coverage` counts three kinds of points: blocks that ran, branches taken (each side of an `if` or a `case`) and signal bits that toggled. The results page shows each kind with the points hit and the total, and CI measures it on every run. `make all` does not.
+`make coverage` counts three kinds of points: blocks that ran, branches taken (each side of an `if` or a `case`) and signal bits that toggled. The results page shows each kind with the points hit and the total, and CI measures it on every run. `make all` does not. With `"//REGRESSION"` set, `make coverage` merges its counters over every run of the list.
 
-**The numbers are for `src/apb_uart_sv.v`**, the file `sv2v` generates, and not for the SystemVerilog under `src/vendor/`. A block here is a block of the translation.
+**The numbers are for `rtl/apb_uart_sv.v`**, the file `sv2v` generates, and not for the SystemVerilog under `rtl/vendor/`. A block here is a block of the translation.
 
 **Pass and fail stay with `make cocotb`.** That run is on Icarus. Verilator is 2-state, so a signal that is X before reset reads 0 there, and a test can pass on one and fail on the other. A failing Verilator run does not fail `make coverage`. A design that Verilator cannot build does. `make coverage SEED=<n>` sets the seed, and the page says which one the run used. [All the details](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#code-coverage-coverage).
 
@@ -271,7 +282,8 @@ what keeps one file valid for both tools.
 | `DESIGN_NAME` | the top module's name; everything else reads it from here |
 | `VERILOG_FILES` | synthesisable sources. Each entry is validated as a literal path; `**` is not expanded |
 | `"//TEST_FILES"` | Verilog testbenches for `make sim`. Globs work |
-| `"//COCOTB_TESTS"` | Python testbenches for `make cocotb` and `make gatesim`. Only files defining `@cocotb.test()`; the rest of `test/` is imported by them |
+| `"//COCOTB_TESTS"` | Python testbenches for `make cocotb` and `make gatesim`. Only files defining `@cocotb.test()`; the rest of `tb/` is imported by them |
+| `"//REGRESSION"` | the YAML test list for `make regress`: `test`, and `seeds` for each |
 | `"//DESCRIPTION"` | one line under the results page's title and in its link preview: what the design is |
 | `CLOCK_PORT` / `CLOCK_PERIOD` | the clock to constrain, and its period in ns |
 | `IO_DELAY_CONSTRAINT` | percentage of the period reserved as external delay on the ports |

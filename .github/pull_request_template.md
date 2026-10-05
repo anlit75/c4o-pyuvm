@@ -22,7 +22,7 @@ For new tests, say whether `make coverage` dropped, and why any new gap is untes
 ## Design impact
 
 <!--
-Only if this touches src/ or config.yaml. `make gds` prints the numbers at the
+Only if this touches rtl/ or config.yaml. `make gds` prints the numbers at the
 end -- paste before and after, so area and timing changes are visible in review
 rather than discovered later. Delete otherwise.
 

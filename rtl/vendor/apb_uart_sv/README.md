@@ -24,5 +24,5 @@ Verifying a design you can change is a different exercise from verifying one
 you cannot, and the second is the one this repository is about. Its bugs stay
 in: see the LATCH waiver in `config.yaml`, which is one of them.
 
-The Verilog the tools here actually read is `src/apb_uart_sv.v`, generated from
+The Verilog the tools here actually read is `rtl/apb_uart_sv.v`, generated from
 these files by `make rtl`. Nothing regenerates them.
