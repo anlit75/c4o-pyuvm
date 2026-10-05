@@ -16,6 +16,7 @@ If this is not fixing anything, say what it adds and why now.
 What you actually ran, and what came back. "Should work" is not verification.
 If something could not be checked here, say so plainly and say why -- an
 unverified claim that is labelled as one is fine; one that is not, is not.
+For new tests, say whether `make coverage` dropped, and why any new gap is untested.
 -->
 
 ## Design impact

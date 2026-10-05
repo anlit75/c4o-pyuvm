@@ -104,6 +104,7 @@ because neither yosys nor Icarus reads the original. `make rtl` regenerates it.
 | `make lint` | Verilator lint | terminal |
 | `make sim` | the Verilog smoke test | `build/tb_apb_uart.vcd` |
 | `make cocotb` | the pyuvm tests against the RTL | `build/cocotb-results.xml` |
+| `make coverage` | the RTL that the pyuvm tests run, counted on Verilator | `build/coverage/` |
 | `make gatesim` | the same tests against the netlist (after `make gds`) | `build/cocotb-gl-results.xml` |
 | `make rtl` | regenerate `src/apb_uart_sv.v` from `src/vendor/` | `src/apb_uart_sv.v` |
 | `make ral` | regenerate `test/uart_ral.py` from `regs/apb_uart.rdl` | `test/uart_ral.py` |
@@ -119,10 +120,12 @@ because neither yosys nor Icarus reads the original. `make rtl` regenerates it.
 `make cocotb SEED=<n>` replays a random failure. The payloads are logged, so a red
 CI run gives you both the seed and the bytes.
 
+`make coverage` counts block, branch and toggle points. The numbers belong to `src/apb_uart_sv.v`, the file that `sv2v` generates, and not to `src/vendor/`. Pass and fail stay with `make cocotb`. The [guide](docs/guide.md#code-coverage) has more.
+
 `make cocotb WAVES=1` also writes `build/apb_uart_sv.vcd`. `make sim` writes its own `build/tb_apb_uart.vcd`.
 
 CI builds the `make site` page on every run and publishes it from `main` to
-GitHub Pages, once **Settings → Pages → Source** is set to **GitHub Actions**.
+GitHub Pages (a manual run of the workflow on `main` publishes it again), once **Settings → Pages → Source** is set to **GitHub Actions**.
 While it is not, CI still passes and says in a notice that nothing was published.
 
 ## Layout

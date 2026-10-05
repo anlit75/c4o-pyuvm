@@ -237,6 +237,9 @@ jobs:
       - name: Report
         id: report
         uses: anlit75/c4o-core/actions/report@v2
+        with:
+          sections: |
+            Coverage
 
       # docs/guide.md, "Iterating without re-running the whole flow", gives one
       # command for resuming from floorplan. Nothing ran the command it used to

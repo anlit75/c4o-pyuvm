@@ -146,6 +146,18 @@ netlist 一起編譯，而那些 model 帶著 `1ns/1ps`；RTL 自己不帶，所
 CI 裡共用的 report 那一步比對的是兩次執行的 summary 行，而不是寫死在 workflow 裡的數字：同一份測試、同
 樣的判定，兩邊都要一致。
 
+## 程式碼覆蓋率
+
+```bash
+make coverage     # 同一批測試再跑一次，用 Verilator 加計數器
+```
+
+`make coverage` 計算三種點：執行過的 block、走過的 branch（`if` 或 `case` 的每一邊）和變過值的訊號位元。結果網頁依種類列出命中的點數和總數，CI 每次都會量。`make all` 不會。
+
+**數字對應的是 `src/apb_uart_sv.v`**，也就是 `sv2v` 生成的檔案，不是 `src/vendor/` 底下的 SystemVerilog。這裡的 block 是翻譯後的 block。
+
+**通過或失敗仍由 `make cocotb` 決定。** 那次執行在 Icarus 上。Verilator 是 2 值模擬，所以 reset 之前是 X 的訊號在那裡讀成 0，同一個測試可能在一個通過、在另一個失敗。Verilator 那次執行失敗，不會讓 `make coverage` 失敗。Verilator 建不起來的設計才會。`make coverage SEED=<n>` 設定 seed，網頁會寫出這次執行用的 seed。[完整細節](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#code-coverage-coverage)。
+
 ## 時序與 constraint
 
 `config.yaml` 裡每個值旁邊都有它的理由。其中兩個值得在這裡說明。

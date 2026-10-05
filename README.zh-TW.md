@@ -91,6 +91,7 @@ make gatesim      # 同一份測試，跑在 gate 上
 | `make lint` | Verilator lint | 終端機 |
 | `make sim` | Verilog 煙霧測試 | `build/tb_apb_uart.vcd` |
 | `make cocotb` | pyuvm 測試對 RTL | `build/cocotb-results.xml` |
+| `make coverage` | pyuvm 測試跑過的 RTL，用 Verilator 計數 | `build/coverage/` |
 | `make gatesim` | 同一份測試對 netlist（要先 `make gds`） | `build/cocotb-gl-results.xml` |
 | `make rtl` | 從 `src/vendor/` 重新生成 `src/apb_uart_sv.v` | `src/apb_uart_sv.v` |
 | `make ral` | 從 `regs/apb_uart.rdl` 重新生成 `test/uart_ral.py` | `test/uart_ral.py` |
@@ -106,10 +107,12 @@ make gatesim      # 同一份測試，跑在 gate 上
 `make cocotb SEED=<n>` 重播一次隨機失敗。payload 會記進 log，所以一次紅掉的 CI 會同時
 告訴你 seed 和那些位元組。
 
+`make coverage` 計算 block、branch 和 toggle 三種點。數字對應的是 `sv2v` 生成的 `src/apb_uart_sv.v`，不是 `src/vendor/`。通過或失敗仍由 `make cocotb` 決定。[指南](docs/guide.zh-TW.md#程式碼覆蓋率)有更多說明。
+
 `make cocotb WAVES=1` 另外寫出 `build/apb_uart_sv.vcd`。`make sim` 寫出自己的 `build/tb_apb_uart.vcd`。
 
 CI 每次都會產生 `make site` 的網頁，並在 **Settings → Pages → Source** 設成
-**GitHub Actions** 之後，從 `main` 發佈到 GitHub Pages。還沒設定時 CI 照樣會過，只會用
+**GitHub Actions** 之後，從 `main` 發佈到 GitHub Pages（在 `main` 上手動執行 workflow 會再發佈一次）。還沒設定時 CI 照樣會過，只會用
 一則 notice 告訴你這次沒有發佈。
 
 ## 專案結構

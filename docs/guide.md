@@ -159,6 +159,18 @@ so an X is a real failure and `int()` raising on it is the behaviour to keep.
 The shared report step in CI compares the two runs' summary lines rather than a count
 written into the workflow: the same tests, the same verdicts, on both.
 
+## Code coverage
+
+```bash
+make coverage     # the same tests again, on Verilator, with counters
+```
+
+`make coverage` counts three kinds of points: blocks that ran, branches taken (each side of an `if` or a `case`) and signal bits that toggled. The results page shows each kind with the points hit and the total, and CI measures it on every run. `make all` does not.
+
+**The numbers are for `src/apb_uart_sv.v`**, the file `sv2v` generates, and not for the SystemVerilog under `src/vendor/`. A block here is a block of the translation.
+
+**Pass and fail stay with `make cocotb`.** That run is on Icarus. Verilator is 2-state, so a signal that is X before reset reads 0 there, and a test can pass on one and fail on the other. A failing Verilator run does not fail `make coverage`. A design that Verilator cannot build does. `make coverage SEED=<n>` sets the seed, and the page says which one the run used. [All the details](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#code-coverage-coverage).
+
 ## Constraints
 
 Each value in `config.yaml` has its reason next to it. Two are worth explaining
