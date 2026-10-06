@@ -242,7 +242,8 @@ VS Code 裡選 *Reopen in Container*，你會拿到 CI 用的同一個 image，V
 *   **它以 `root` 執行。** 在 Linux host 上，它寫進 `build/` 的檔案屬於 `root`，所以從
     host 跑 `make clean` 可能要 `sudo`。改成一般使用者會弄壞 Codespaces。
 *   **在 Codespace 裡要注意磁碟。** 內層 daemon 有自己的 image store，所以 LibreLane 的
-    image 是重抓一份而不是共用，PDK 又是 3GB。在最小的機型上那幾乎就是整顆磁碟。
+    image 是重抓一份而不是共用，PDK 又是好幾 GB。執行 `du -sh pdks/` 可以看它的大小。在最小的機型上
+    那幾乎就是整顆磁碟。
 
 `make shell` 可以從任何終端機進到同一個 image。
 

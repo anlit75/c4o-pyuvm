@@ -71,7 +71,7 @@ for.
 git clone https://github.com/anlit75/c4o-pyuvm.git
 cd c4o-pyuvm
 make all          # lint, Verilog sim, the pyuvm tests, synthesis — seconds
-make gds          # the physical flow: minutes, plus ~3GB of PDK the first time
+make gds          # the physical flow: minutes, plus a multi-GB PDK the first time
 make report       # area, timing, power, signoff
 make gatesim      # the same tests, on the gates
 ```
