@@ -51,10 +51,10 @@ cycle 寬。一條線沒有延遲。
 | 測試 | 只有它抓得到 |
 |---|---|
 | `loopback` | 一個位元組根本走不完一圈 |
-| `random_bytes` | 任何需要超過一個位元組才會顯現的問題 —— 一個沒讓 RX FIFO 前進的讀取，會永遠讀到同一個「正確」的位元組 |
+| `random_bytes` | 任何需要超過一個位元組才會顯現的問題。一個沒讓 RX FIFO 前進的讀取，會永遠讀到同一個「正確」的位元組 |
 | `burst` | 任何需要超過一個位元組**同時在路上**的問題。一次送一個永遠不會讓 FIFO 裡有兩筆，所以分不出佇列和暫存器 |
 | `reset_values` | 某個暫存器 reset 出來的值是錯的 |
-| `register_readback` | 一次寫到錯位址的寫入 —— 所有資料路徑測試都看不見，因為 UART 還是傳得好好的 |
+| `register_readback` | 一次寫到錯位址的寫入。所有資料路徑測試都看不見，因為 UART 還是傳得好好的 |
 | `idle_status` | 某個狀態位元錯了，但整個位元組看起來還是對的 |
 
 `register_readback` 就是暫存器模型存在的理由。其他測試在一個把 IER 的值寫進 MCR 的設計
@@ -81,7 +81,7 @@ git checkout -- rtl/apb_uart_sv.v
 
 *   **`reset_values` 對 LSR 比名字聽起來弱。** `THRE` 和 `TEMT` 是組合邏輯驅動的，所以
     reset 值在第一個時脈邊緣就被蓋掉，從 bus 上觀察不到。改 RTL 裡的那個值不會讓任何測
-    試失敗。那個檢查真正斷言的是「一個閒置的傳送器會說自己是空的」—— 這也是
+    試失敗。那個檢查真正斷言的是「一個閒置的傳送器會說自己是空的」。這也是
     `idle_status` 要逐欄位釘住那些位元的原因。
 *   **有一個檢查是瞄準 testbench 自己的。** 測試基底類別會斷言 scoreboard 比對到的位元
     組數目正好等於送出去的數目。所以把 monitor 弄啞會大聲失敗，而不是讓每次比對都在空
@@ -115,7 +115,7 @@ PeakRDL 不會產出這些，`uart_env.py` 負責設定。碰到下面任一個�
 |---|---|
 | 任何存取都出 `unsupported operand type(s) for +: 'NoneType' and 'int'` | map 是用 `UVM_NO_ENDIAN` 建的，pyuvm 讀成「沒指定 endianness」。用一個真的 endianness 重新 configure |
 | 同樣的錯誤，前面還有 `Map ... does not seem to initialized correctly` | `build()` 之後要呼叫 `lock_model()` |
-| `value read from DUT (0x5F) does not match mirrored value (0x0)` | `set_auto_predict(True)` —— 否則 mirror 永遠停在 reset 值 |
+| `value read from DUT (0x5F) does not match mirrored value (0x0)` | `set_auto_predict(True)`。否則 mirror 永遠停在 reset 值 |
 | `mirror(UVM_CHECK)` 印出不符，測試卻還是過 | `set_sv_uvm_style_reporting_enabled(True)`，否則暫存器層的錯誤會進到 report server 不會算的那個 logger |
 
 用 auto-prediction 而不是在 monitor 上掛 `uvm_reg_predictor` 是刻意的。一般來說
@@ -184,7 +184,7 @@ time 是
 
 20% 時每多加一奈秒只拿回 0.8 ns，5% 時拿回 0.95 ns。
 
-**`CLOCK_PERIOD: 11.0` —— 90.9 MHz，不是 100。** 用一個誠實的 port 預算，這個設計收不
+**`CLOCK_PERIOD: 11.0` 是 90.9 MHz，不是 100。** 用一個誠實的 port 預算，這個設計收不
 了 100 MHz：從 RX FIFO 的讀指標穿過 APB 讀取 mux 到 `PRDATA` 的那條路徑塞不進去。那條
 路徑大約三分之一是流程為了修 hold 插進來的延遲單元。hold slack 小到不能少插，所以不
 是調一個 constraint 就能解決的。要到 100 MHz 只能宣稱 port 的外部延遲是零。那就是斷言
@@ -196,7 +196,7 @@ time 是
 
 ## 不重跑整條流程
 
-floorplan 相關的參數 —— `FP_CORE_UTIL`、die 的大小、擺放 —— 不需要重做合成。用 LibreLane
+floorplan 相關的參數（`FP_CORE_UTIL`、die 的大小、擺放）不需要重做合成。用 LibreLane
 自己的旗標，從 floorplan 恢復上次的執行：
 
 ```bash
@@ -221,7 +221,7 @@ LibreLane 會從已經做完的設計開始，流程會失敗。這個指令會�
 make schematic
 ```
 
-畫出 `build/schematic.svg` —— 設計呈現成 flop、加法器、mux，帶著 RTL 給它們的名字。用瀏
+畫出 `build/schematic.svg`。設計呈現成 flop、加法器、mux，帶著 RTL 給它們的名字。用瀏
 覽器開，或在 VS Code 裡點開。
 
 它不是 netlist 的圖。`make synth` 跑的是完整合成，留下幾百顆製程 cell，從來沒有人從那
@@ -234,7 +234,7 @@ make schematic
 VS Code 裡選 *Reopen in Container*，你會拿到 CI 用的同一個 image，Verilog 擴充套件都裝
 好了。`Makefile` 會發現自己已經在裡面，於是直接呼叫工具，不再多包一層容器。
 
-`make gds` 在裡面也能用 —— 容器自帶一個 Docker daemon 給 LibreLane sidecar。如果它說找
+`make gds` 在裡面也能用。容器自帶一個 Docker daemon 給 LibreLane sidecar。如果它說找
 不到，重建 Dev Container。
 
 兩件要知道的事：
@@ -249,7 +249,7 @@ VS Code 裡選 *Reopen in Container*，你會拿到 CI 用的同一個 image，V
 ## 設定檔參考
 
 `config.yaml` 是 [LibreLane](https://github.com/librelane/librelane) 的設定檔。不屬於
-LibreLane 的 key 都帶 `//` 前綴，它會忽略 —— 這就是讓同一個檔案對兩邊都有效的方法。
+LibreLane 的 key 都帶 `//` 前綴，它會忽略。這就是讓同一個檔案對兩邊都有效的方法。
 
 | Key | 說明 |
 |---|---|

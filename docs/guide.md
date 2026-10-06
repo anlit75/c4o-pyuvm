@@ -55,10 +55,10 @@ Six tests, each covering something the others cannot.
 | test | what only it can catch |
 |---|---|
 | `loopback` | a single byte failing to make the round trip at all |
-| `random_bytes` | anything that needs more than one byte — a read that does not advance the RX FIFO reads the same correct byte forever |
+| `random_bytes` | anything that needs more than one byte. A read that does not advance the RX FIFO reads the same correct byte forever |
 | `burst` | anything that needs more than one byte *in flight*. Sending one at a time never puts two in the FIFO, so it cannot tell a queue from a register |
 | `reset_values` | a register coming out of reset wrong |
-| `register_readback` | a write that lands at the wrong address — invisible to every data-path test, because the UART still sends correctly |
+| `register_readback` | a write that lands at the wrong address. It is invisible to every data-path test, because the UART still sends correctly |
 | `idle_status` | one status bit wrong where the whole byte still looks right |
 
 `register_readback` is why the register model exists. The rest would all pass a
@@ -88,7 +88,7 @@ Worth knowing about two of them:
     driven combinationally, so the reset value is overwritten on the first clock
     edge and is not observable from the bus. Changing it in the RTL does not fail
     any test. What that check really asserts is that an idle transmitter reports
-    itself empty — which is why `idle_status` pins those bits field by field.
+    itself empty. That is why `idle_status` pins those bits field by field.
 *   **One check is aimed at the testbench.** The test base class asserts the
     scoreboard matched exactly as many bytes as were sent. So silencing the monitor
     fails loudly instead of letting every comparison pass on an empty queue.
@@ -125,7 +125,7 @@ errors, this is why:
 |---|---|
 | `unsupported operand type(s) for +: 'NoneType' and 'int'` on any access | the map is created with `UVM_NO_ENDIAN`, which pyuvm reads as *no endianness specified*. Reconfigure it with one |
 | the same error, after `Map ... does not seem to initialized correctly` | call `lock_model()` after `build()` |
-| `value read from DUT (0x5F) does not match mirrored value (0x0)` | `set_auto_predict(True)` — otherwise the mirror never leaves its reset value |
+| `value read from DUT (0x5F) does not match mirrored value (0x0)` | `set_auto_predict(True)`. Otherwise the mirror never leaves its reset value |
 | `mirror(UVM_CHECK)` logs a mismatch and the test still passes | `set_sv_uvm_style_reporting_enabled(True)`, or the register layer's errors go to a logger the report server never counts |
 
 Auto-prediction rather than a `uvm_reg_predictor` on the monitor is deliberate. A
@@ -199,7 +199,7 @@ period − clock uncertainty − IO_DELAY_CONSTRAINT × period
 
 At 20% each added nanosecond returns only 0.8 ns. At 5% it returns 0.95 ns.
 
-**`CLOCK_PERIOD: 11.0` — 90.9 MHz, not 100.** With an honest port budget the design
+**`CLOCK_PERIOD: 11.0` is 90.9 MHz, not 100.** With an honest port budget the design
 does not meet 100 MHz: the path from the RX FIFO's read pointer through the APB read
 mux to `PRDATA` does not fit. Roughly a third of that path is delay cells the flow
 inserted to fix hold. Hold slack is too small to insert fewer, so it is not a
@@ -213,7 +213,7 @@ directly instead, so a *new* loop still fails the build.
 
 ## Iterating without re-running the whole flow
 
-Floorplan parameters — `FP_CORE_UTIL`, the die, the placement — do not need
+Floorplan parameters (`FP_CORE_UTIL`, the die, the placement) do not need
 synthesis redone. Resume the last run from floorplan with LibreLane's own flags:
 
 ```bash
@@ -242,7 +242,7 @@ gates the *old* period produced under the new one. The 90.9 MHz in
 make schematic
 ```
 
-Draws `build/schematic.svg` — the design as flops, adders and muxes, carrying the
+Draws `build/schematic.svg`. It shows the design as flops, adders and muxes, carrying the
 names the RTL gave them. Open it in a browser or click it in VS Code.
 
 It is not a picture of the netlist. `make synth` runs a full synthesis and leaves
@@ -257,7 +257,7 @@ Codespaces, or in VS Code with *Reopen in Container*, and you get the image CI u
 with the Verilog extensions installed. The `Makefile` notices it is already inside
 and calls the tools directly instead of nesting another container.
 
-`make gds` works in here too — the container ships a Docker daemon of its own for
+`make gds` works in here too. The container ships a Docker daemon of its own for
 the LibreLane sidecar. If it says it cannot find one, rebuild the Dev Container.
 
 Two things to know:
@@ -274,7 +274,7 @@ Two things to know:
 ## Configuration reference
 
 `config.yaml` is a [LibreLane](https://github.com/librelane/librelane) configuration
-file. Keys LibreLane does not own carry a `//` prefix, which it ignores — that is
+file. Keys LibreLane does not own carry a `//` prefix, which it ignores. That is
 what keeps one file valid for both tools.
 
 | Key | What it does |
@@ -293,8 +293,8 @@ what keeps one file valid for both tools.
 | `FP_SIZING` / `FP_CORE_UTIL` | how the die is sized |
 | `PDK` / `STD_CELL_LIBRARY` | Sky130 and its standard cells. Leave alone |
 
-**The die sizes itself.** `FP_SIZING: relative` floorplans from `FP_CORE_UTIL` — how
-full the core should be — so a bigger design gets a bigger die instead of "does not
+**The die sizes itself.** `FP_SIZING: relative` floorplans from `FP_CORE_UTIL` (how
+full the core should be), so a bigger design gets a bigger die instead of "does not
 fit". Lower it if routing is tight. Raise it for a smaller chip.
 
 A fixed die is still available: `FP_SIZING: absolute` with

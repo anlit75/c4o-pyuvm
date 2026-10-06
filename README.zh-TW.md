@@ -28,13 +28,13 @@
 **pyuvm 不是 SystemVerilog UVM**，而如果你在做作品集，這個差別值得講清楚。
 [pyuvm](https://github.com/pyuvm/pyuvm) 是用 Python 實作 UVM 1.2 的類別庫，所以這裡的
 架構是真的：一樣的分層、一樣的 phase、一樣的 objection 機制、一樣的暫存器層。轉不過去
-的是語言——SystemVerilog 的 macro、factory、virtual interface、`fork`/`join`。所以
+的是語言：SystemVerilog 的 macro、factory、virtual interface、`fork`/`join`。所以
 「建置過 pyuvm 驗證環境」是這個 repo 撐得起的說法。「SystemVerilog UVM 經驗」不是。
 一個會追問第二句的面試官會問出你指的是哪一個。
 
 ## 它跟別人不一樣的地方
 
-**Gate-level 用的是同一份測試。** 不是另寫一份給 netlist 的 testbench —— 同一份
+**Gate-level 用的是同一份測試。** 不是另寫一份給 netlist 的 testbench。同一份
 Python、同一個 scoreboard、同一個暫存器模型：
 
 ```bash
@@ -65,7 +65,7 @@ make report       # 面積、時序、功耗、signoff
 make gatesim      # 同一份測試，跑在 gate 上
 ```
 
-需要 Docker、Make、Git —— 或者一個都不用：用 GitHub Codespace 打開。
+需要 Docker、Make、Git，如果用 GitHub Codespace 打開則一個都不用。
 
 ## 受測設計
 
@@ -89,7 +89,7 @@ make gatesim      # 同一份測試，跑在 gate 上
 
 | 指令 | 說明 | 產出 |
 |---|---|---|
-| `make all` | `lint`、`sim`、`cocotb`、`synth` —— 所有幾秒內跑完的東西 | 終端機 |
+| `make all` | `lint`、`sim`、`cocotb`、`synth`：所有幾秒內跑完的東西 | 終端機 |
 | `make lint` | Verilator lint | 終端機 |
 | `make sim` | Verilog 煙霧測試 | `build/tb_apb_uart.vcd` |
 | `make cocotb` | pyuvm 測試對 RTL | `build/cocotb-results.xml` |
@@ -103,9 +103,9 @@ make gatesim      # 同一份測試，跑在 gate 上
 | `make gds` | 用 LibreLane 做物理 layout | `build/apb_uart_sv.gds` |
 | `make report` | 上一次 `make gds` 的面積、時序、功耗、signoff | 終端機 |
 | `make site` | 把 layout、測試結果、含限制條件的時序、面積與 instance、功耗、signoff 檢查和兩次 cocotb 結果放進同一個網頁 | `build/site/index.html` |
-| `make shell` | 進入 c4o-core 容器 | — |
-| `make clean` | 刪掉 `build/`，保留 `runs/` | — |
-| `make distclean` | 刪掉 `build/` 和 `runs/` | — |
+| `make shell` | 進入 c4o-core 容器 | 無 |
+| `make clean` | 刪掉 `build/`，保留 `runs/` | 無 |
+| `make distclean` | 刪掉 `build/` 和 `runs/` | 無 |
 
 `make cocotb SEED=<n>` 重播一次隨機失敗。payload 會記進 log，所以一次紅掉的 CI 會同時
 告訴你 seed 和那些位元組。
@@ -143,11 +143,11 @@ docs/guide.zh-TW.md   它怎麼運作
 
 [指南](docs/guide.zh-TW.md)講 testbench 怎麼搭的，以及為什麼：
 
-*   [環境](docs/guide.zh-TW.md#環境) —— scoreboard 檢查什麼，以及它刻意不模擬什麼
-*   [每個測試抓什麼](docs/guide.zh-TW.md#每個測試抓什麼) —— 以及怎麼確認一個測試還會失敗
-*   [暫存器模型](docs/guide.zh-TW.md#暫存器模型) —— SystemRDL 說不出 16550 的哪四件事，以及它需要的 pyuvm 設定
-*   [跑在 gate 上](docs/guide.zh-TW.md#跑在-gate-上) —— 讓這件事成立的那一條規則
-*   [時序與 constraint](docs/guide.zh-TW.md#時序與-constraint) —— 時脈為什麼是 90.9 MHz
+*   [環境](docs/guide.zh-TW.md#環境)：scoreboard 檢查什麼，以及它刻意不模擬什麼
+*   [每個測試抓什麼](docs/guide.zh-TW.md#每個測試抓什麼)：怎麼確認一個測試還會失敗
+*   [暫存器模型](docs/guide.zh-TW.md#暫存器模型)：SystemRDL 說不出 16550 的哪四件事，以及它需要的 pyuvm 設定
+*   [跑在 gate 上](docs/guide.zh-TW.md#跑在-gate-上)：讓這件事成立的那一條規則
+*   [時序與 constraint](docs/guide.zh-TW.md#時序與-constraint)：時脈為什麼是 90.9 MHz
 *   [設定檔參考](docs/guide.zh-TW.md#設定檔參考)
 
 ---

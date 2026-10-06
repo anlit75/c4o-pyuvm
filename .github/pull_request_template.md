@@ -1,8 +1,7 @@
 ## Problem
 
 <!--
-What is wrong today, and how you know it. Paste the evidence -- the failing
-command, the log line, the wrong output -- rather than describing it.
+What is wrong today, and how you know it. Paste the evidence (the failing command, the log line, the wrong output) rather than describing it.
 If this is not fixing anything, say what it adds. Say why now.
 -->
 

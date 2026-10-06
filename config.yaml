@@ -15,13 +15,13 @@ DESIGN_NAME: apb_uart_sv
 VERILOG_FILES:
   - dir::rtl/apb_uart_sv.v
 
-# Simulation only -- LibreLane has no testbench variable, since simulation sits
+# Simulation only. LibreLane has no testbench variable, since simulation sits
 # outside an RTL-to-GDSII flow.
 "//TEST_FILES":
   - dir::tb/*.v
 
 # The pyuvm tests. cocotb finds them by module name, so only the files that
-# define @cocotb.test() go here -- apb_agent.py and uart_env.py are imported by
+# define @cocotb.test() go here. apb_agent.py and uart_env.py are imported by
 # them, from the same directory, which c4o-core puts on PYTHONPATH.
 "//COCOTB_TESTS":
   - dir::tb/test_*.py
@@ -43,7 +43,7 @@ CLOCK_PORT: CLK
 # and the path from uart_rx_fifo_i's read pointer through the APB read mux to
 # PRDATA arrives at 9.28 ns, of which 2.83 ns are delay cells the flow inserted
 # to fix hold. Hold slack is +0.10 ns, so it cannot insert fewer. 100 MHz is
-# reachable only by claiming zero external delay on the ports -- which says
+# reachable only by claiming zero external delay on the ports. That claim says
 # whatever latches PRDATA needs no setup time of its own.
 CLOCK_PERIOD: 11.0
 
@@ -84,13 +84,13 @@ IO_DELAY_CONSTRAINT: 5
 LINTER_DISABLE_WARNINGS: [LATCH, WIDTHEXPAND]
 
 # The blackbox stubs LibreLane generates for the PDK cells carry no timescale,
-# so TIMESCALEMOD fires once per cell -- none of them from the design. UNDRIVEN
+# so TIMESCALEMOD fires once per cell. None of them is from the design. UNDRIVEN
 # and UNUSEDSIGNAL are in c4o-core's default list for the same kind of reason,
 # and have to be repeated because this key overrides rather than appends.
 LINTER_DISABLE_WARNINGS_BLACKBOX: [UNDRIVEN, UNUSEDSIGNAL, TIMESCALEMOD]
 
 # The pre-synthesis check finds eight logic loops in this design and, at the
-# default, quits at stage 8 of 80 -- so `make gds` never reaches a GDS. All
+# default, quits at stage 8 of 80, so `make gds` never reaches a GDS. All
 # eight are the same dead register:
 #
 #   Warning: found logic loop in module apb_uart_sv:
@@ -98,7 +98,7 @@ LINTER_DISABLE_WARNINGS_BLACKBOX: [UNDRIVEN, UNUSEDSIGNAL, TIMESCALEMOD]
 #         AD[0] --> Q[0]
 #
 # regs_q is ten bytes of register file. The asynchronous reset assigns nine of
-# them and leaves out byte 0 -- THR/RBR -- so yosys builds a reset value with
+# them and leaves out byte 0 (THR/RBR), so yosys builds a reset value with
 # regs_q[7:0] inside it, which is not constant, which makes the register an
 # $aldff whose load input is its own output. Eight bits, eight self-loops.
 #
@@ -106,8 +106,8 @@ LINTER_DISABLE_WARNINGS_BLACKBOX: [UNDRIVEN, UNUSEDSIGNAL, TIMESCALEMOD]
 # come back from fifo_rx_data, so nothing ever touches regs_q[7:0]. The same
 # check after opt reports zero problems, and none of it reaches the netlist.
 #
-# Turning the checker off is blunt -- it would stop reporting a real
-# combinational loop too -- so `verify.yml` asserts the two reports directly:
+# Turning the checker off is blunt, because it would stop reporting a real
+# combinational loop too. So `verify.yml` asserts the two reports directly:
 # exactly eight problems before opt, all eight naming regs_q, and a clean report
 # after. A new loop moves one of those numbers and CI goes red.
 ERROR_ON_SYNTH_CHECKS: false
