@@ -2,7 +2,7 @@
 #
 # A LibreLane configuration file. The same file drives linting and simulation
 # through c4o-core and the physical flow through LibreLane, so the variable
-# names are LibreLane's. Keys starting with '//' are c4o-core's; LibreLane
+# names are LibreLane's. Keys starting with '//' are c4o-core's. LibreLane
 # ignores them. 'dir::' marks a path as relative to this directory.
 
 # ============ what you normally change ============
@@ -10,8 +10,8 @@
 DESIGN_NAME: apb_uart_sv
 
 # The generated Verilog, not the SystemVerilog it came from. `make rtl` writes
-# it; rtl/vendor/apb_uart_sv/README.md says why it is committed. A glob does not
-# work here: LibreLane validates each entry as a literal path.
+# it. rtl/vendor/apb_uart_sv/README.md says why it is committed. A glob does not
+# work here: LibreLane checks each entry as a literal path.
 VERILOG_FILES:
   - dir::rtl/apb_uart_sv.v
 
@@ -80,7 +80,7 @@ IO_DELAY_CONSTRAINT: 5
 #
 # WIDTHEXPAND is sv2v's: it renders `$unsigned(BUFFER_DEPTH - 1)` as a 32-bit
 # constant, and Verilator objects to comparing that against a 4-bit pointer. The
-# comparison is correct; the widths are the translator's.
+# comparison is correct. The widths are the translator's.
 LINTER_DISABLE_WARNINGS: [LATCH, WIDTHEXPAND]
 
 # The blackbox stubs LibreLane generates for the PDK cells carry no timescale,
@@ -107,7 +107,7 @@ LINTER_DISABLE_WARNINGS_BLACKBOX: [UNDRIVEN, UNUSEDSIGNAL, TIMESCALEMOD]
 # check after opt reports zero problems, and none of it reaches the netlist.
 #
 # Turning the checker off is blunt -- it would stop reporting a real
-# combinational loop too -- so verify.yml asserts the two reports directly:
+# combinational loop too -- so `verify.yml` asserts the two reports directly:
 # exactly eight problems before opt, all eight naming regs_q, and a clean report
 # after. A new loop moves one of those numbers and CI goes red.
 ERROR_ON_SYNTH_CHECKS: false

@@ -23,7 +23,7 @@ jobs:
   #
   # Decided in a job because of the trap described above: with paths-ignore the
   # check never reports, and here it reports as skipped. Everything is unchecked
-  # on such a pull request; one that touches any other file runs all of it.
+  # on such a pull request. One that touches any other file runs all of it.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -207,7 +207,7 @@ jobs:
 
       # The flow reports setup violations as a warning, so without this step the
       # repository can go green on a design that misses its own clock -- which it
-      # did, for two runs. `make report` already prints the numbers; this is what
+      # did, for two runs. `make report` already prints the numbers. This is what
       # makes them count.
       #
       # A gate and not another warning, on purpose. IO_DELAY_CONSTRAINT in

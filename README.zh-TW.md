@@ -7,27 +7,29 @@
 
 **一個驗別人家 UART 的 pyuvm testbench，一路做到 GDS。**
 
-一個 APB agent、一個 scoreboard、一個從 SystemRDL 檔生成的暫存器模型 —— 對 RTL 跑一
+一個 APB agent、一個 scoreboard、一個從 SystemRDL 檔生成的暫存器模型。它們對 RTL 跑一
 次，再對它合成出來的 gate 跑一次。每件事一個 `make` 指令，不用裝任何東西。
 
 這不是拿來放你自己設計的模板。[ChipForAll](https://github.com/anlit75/ChipForAll)
 才是，這個 repo 是從它建出來的。
 
 **這是給誰看的。** 給已經在驗硬體、或正在學怎麼驗的人。它假設你看得懂 Verilog、知道
-合成和 netlist 是什麼、也碰過某種 bus 協定——指南直接討論 APB 的 phase 和 16550 的暫
+合成和 netlist 是什麼、也碰過某種 bus 協定。指南直接討論 APB 的 phase 和 16550 的暫
 存器圖，兩個都不會先解釋。它同時也假設你認得那套詞
-彙——agent、driver、monitor、sequencer、scoreboard、`ConfigDB`、暫存器模型——而且它解
-釋的是**這一個**環境為什麼這樣搭，不是那些層各自存在的理由。這是兩個不同的缺口。如果
+彙：agent、driver、monitor、sequencer、scoreboard、`ConfigDB`、暫存器模型。它解
+釋的是**這一個**環境為什麼這樣搭，不是那些層各自存在的理由。
+
+這是兩個不同的缺口。如果
 對你來說是 Verilog 和整條流程比較新，先從
-[ChipForAll](https://github.com/anlit75/ChipForAll) 開始：它用一個小到可以一眼看完的
-設計把那些教完，而這個 repo 之後還會在這裡。如果新的是那套詞彙，ChipForAll 補不了——它
-的測試是平的，沒有分層可看——該去的是 pyuvm 自己的文件。
+[ChipForAll](https://github.com/anlit75/ChipForAll) 開始。它用一個小到可以一眼看完的
+設計把那些教完，而這個 repo 之後還會在這裡。如果新的是那套詞彙，ChipForAll 補不了。它
+的測試是平的，沒有分層可看。該去的是 pyuvm 自己的文件。
 
 **pyuvm 不是 SystemVerilog UVM**，而如果你在做作品集，這個差別值得講清楚。
 [pyuvm](https://github.com/pyuvm/pyuvm) 是用 Python 實作 UVM 1.2 的類別庫，所以這裡的
 架構是真的：一樣的分層、一樣的 phase、一樣的 objection 機制、一樣的暫存器層。轉不過去
 的是語言——SystemVerilog 的 macro、factory、virtual interface、`fork`/`join`。所以
-「建置過 pyuvm 驗證環境」是這個 repo 撐得起的說法；「SystemVerilog UVM 經驗」不是，而
+「建置過 pyuvm 驗證環境」是這個 repo 撐得起的說法。「SystemVerilog UVM 經驗」不是。
 一個會追問第二句的面試官會問出你指的是哪一個。
 
 ## 它跟別人不一樣的地方
@@ -50,7 +52,7 @@ make gatesim      # 拿同一份測試去跑它
 卻收不了自己的時脈。這裡有一步把它變成 build 失敗，並先印出沒收到的路徑。
 
 **DUT 的 bug 留在裡面。** 驗一個你不能改的設計，跟驗一個你自己寫的，是兩種不同的練
-習 —— 而 DV 工程師領薪水做的是前者。
+習。DV 工程師領薪水做的是前者。
 
 ## 快速開始
 
@@ -114,9 +116,10 @@ make gatesim      # 同一份測試，跑在 gate 上
 
 `make cocotb WAVES=1` 另外寫出 `build/apb_uart_sv.vcd`。`make sim` 寫出自己的 `build/tb_apb_uart.vcd`。
 
-CI 每次都會產生 `make site` 的網頁，並在 **Settings → Pages → Source** 設成
-**GitHub Actions** 之後，從 `main` 發佈到 GitHub Pages（在 `main` 上手動執行 workflow 會再發佈一次）。還沒設定時 CI 照樣會過，只會用
-一則 notice 告訴你這次沒有發佈。
+CI 每次都會產生 `make site` 的網頁。
+**Settings → Pages → Source** 設成 **GitHub Actions** 之後，CI 從 `main` 發佈到 GitHub Pages。
+在 `main` 上手動執行 workflow 會再發佈一次。
+還沒設定時 CI 照樣會過，只會用一則 notice 告訴你這次沒有發佈。
 
 ## 專案結構
 
