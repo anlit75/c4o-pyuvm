@@ -184,11 +184,8 @@ time 是
 
 20% 時每多加一奈秒只拿回 0.8 ns，5% 時拿回 0.95 ns。
 
-**`CLOCK_PERIOD: 11.0` 是 90.9 MHz，不是 100。** 用一個誠實的 port 預算，這個設計收不
-了 100 MHz：從 RX FIFO 的讀指標穿過 APB 讀取 mux 到 `PRDATA` 的那條路徑塞不進去。那條
-路徑大約三分之一是流程為了修 hold 插進來的延遲單元。hold slack 小到不能少插，所以不
-是調一個 constraint 就能解決的。要到 100 MHz 只能宣稱 port 的外部延遲是零。那就是斷言
-「不管是誰去 latch `PRDATA`，它自己不需要 setup time」。
+**`CLOCK_PERIOD: 11.0` 是 90.9 MHz，不是 100。** 100 MHz 時 setup 的路徑還塞得進去，
+但 hold 在 `max_ss` corner 不過，流程會停下來。兩種週期量到的 slack 寫在 `config.yaml`。
 
 `ERROR_ON_SYNTH_CHECKS` 是關掉的，因為 DUT 的暫存器檔有 8 個自我迴圈的死位元，被合成前
 檢查報成邏輯迴圈。它們在最佳化之後就消失，從來沒進到 netlist。CI 有一步直接去斷言那些
