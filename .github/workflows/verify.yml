@@ -9,7 +9,7 @@ on:
       - 'LICENSE'
       - '.gitignore'
   # No paths-ignore here, deliberately. A required status check that never runs
-  # is not "skipped", it is "Expected -- waiting for status to be reported", and
+  # is not "skipped". It stays at "Expected", waiting for status to be reported, and
   # the pull request can never be merged. The `changes` job below skips the flow
   # for a docs-only pull request instead, and reports as skipped.
   pull_request:
@@ -17,13 +17,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  # A pull request that changes only what the push trigger above ignores --
-  # Markdown, LICENSE, .gitignore -- does not run the flow. No step below reads
+  # A pull request that changes only what the push trigger above ignores (Markdown,
+  # LICENSE, .gitignore) does not run the flow. No step below reads
   # any of those files.
   #
   # Decided in a job because of the trap described above: with paths-ignore the
   # check never reports, and here it reports as skipped. Everything is unchecked
-  # on such a pull request; one that touches any other file runs all of it.
+  # on such a pull request. One that touches any other file runs all of it.
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -51,15 +51,15 @@ jobs:
           fi
 
   # The Dev Container is the "zero install" promise, and nothing else here
-  # exercises it -- the job below runs on the host, against the plain image.
+  # exercises it. The job below runs on the host, against the plain image.
   # So a devcontainer.json change could only be caught by opening a Codespace
   # by hand, which is how `remoteUser` broke once already.
   #
   # Builds it for real and checks the two things `make gds` needs from it: a
   # Docker daemon that answers (the guard's exact condition), and the
   # in-container delegation path the Makefile takes when it finds the
-  # entrypoint script locally. It does not run `make gds` itself -- that wants
-  # a 3GB PDK and twenty minutes -- and it cannot speak for Codespaces, whose
+  # entrypoint script locally. It does not run `make gds` itself, because that wants
+  # a multi-GB PDK and a long run. It cannot speak for Codespaces, whose
   # remote server is a different thing again.
   devcontainer:
     needs: changes
@@ -81,8 +81,8 @@ jobs:
             echo "--- the in-container delegation path ---"
             make lint
 
-  # The steps every repository made from the ChipForAll template shares -- the
-  # image and PDK setup, the fast checks, the flow, the report, the uploads --
+  # The steps every repository made from the ChipForAll template shares (the
+  # image and PDK setup, the fast checks, the flow, the report, the uploads)
   # are composite actions in c4o-core, so a fix to them arrives here without
   # anybody copying it. The steps written out below are this repository's own.
   # They sit in the same job because they read what the flow leaves in runs/
@@ -116,7 +116,7 @@ jobs:
       # tests keep checking the old map while the .rdl documents a new one.
       #
       # So regenerate it here and diff. The file is left exactly as peakrdl writes
-      # it -- no header of ours -- which is what makes this comparison the tool's
+      # it, with no header of ours, which is what makes this comparison the tool's
       # output against the tool's output and nothing else.
       - name: The register model matches the .rdl it came from
         run: |
@@ -179,8 +179,8 @@ jobs:
           echo "8 pre-synthesis loops, all regs_q[7:0]; nothing left after opt."
 
       # `make report` says "setup slack -0.75 ns (24 violations)" and nothing
-      # says which paths. LibreLane wrote them down -- per corner, inside the
-      # STA step's directory -- but nothing points anyone at that, so a timing
+      # says which paths. LibreLane wrote them down, per corner, inside the
+      # STA step's directory, but nothing points anyone at that, so a timing
       # violation in this repository is a number you cannot look into unless you
       # already know the step layout. Print them where the run can be read.
       #
@@ -188,7 +188,7 @@ jobs:
       # LibreLane's call and it says warning, so this step does not second-guess
       # it. It fails only when the report is missing or is not a timing report,
       # which is what happens when the layout moves and a step like this quietly
-      # starts printing nothing -- so it lists what it did find before giving up.
+      # starts printing nothing, so it lists what it did find before giving up.
       - name: Print the setup paths the flow could not close
         run: |
           shopt -s nullglob
@@ -206,8 +206,8 @@ jobs:
           sed -n '/slack_max/,$p' "$rpt" | head -250
 
       # The flow reports setup violations as a warning, so without this step the
-      # repository can go green on a design that misses its own clock -- which it
-      # did, for two runs. `make report` already prints the numbers; this is what
+      # repository can go green on a design that misses its own clock, which it
+      # did, for two runs. `make report` already prints the numbers. This is what
       # makes them count.
       #
       # A gate and not another warning, on purpose. IO_DELAY_CONSTRAINT in
@@ -232,7 +232,7 @@ jobs:
 
       # The action also runs the same pyuvm tests again against the gates that
       # `make gds` produced, and fails unless the summary line matches the RTL
-      # run's. Not a second testbench -- the same Python. If a test reaches
+      # run's. Not a second testbench. It is the same Python. If a test reaches
       # inside the design, that is where it shows up, on every pull request.
       - name: Report
         id: report

@@ -7,8 +7,8 @@
 
 **A pyuvm testbench for a UART somebody else wrote, taken all the way to a GDS.**
 
-An APB agent, a scoreboard, and a register model generated from a SystemRDL file —
-run against the RTL and again against the gates it synthesises into. One `make`
+An APB agent, a scoreboard, and a register model generated from a SystemRDL file.
+They run against the RTL and again against the gates it synthesises into. One `make`
 command each, nothing to install.
 
 This is not a template to put your own design in.
@@ -17,31 +17,32 @@ was made from it.
 
 **Who it is for.** Somebody who verifies hardware, or is learning to. It assumes
 you already read Verilog, know what synthesis and a netlist are, and have met a
-bus protocol before — the guide discusses APB phases and a 16550's register map
-without explaining either. It also assumes the vocabulary — agent, driver,
-monitor, sequencer, scoreboard, `ConfigDB`, register model — and explains why
+bus protocol before. The guide discusses APB phases and a 16550's register map
+without explaining either. It also assumes the vocabulary: agent, driver,
+monitor, sequencer, scoreboard, `ConfigDB`, register model. It explains why
 *this* environment is built the way it is rather than what the layers are for.
+
 Those are two separate gaps. If the Verilog and the flow are what is new, start
-with [ChipForAll](https://github.com/anlit75/ChipForAll): it teaches those on a
+with [ChipForAll](https://github.com/anlit75/ChipForAll). It teaches those on a
 design small enough to hold in your head, and this repository will still be here
-afterwards. If the vocabulary is what is new, ChipForAll will not close it — its
-tests are flat, with no layers to look at — and pyuvm's own documentation is
-where to start.
+afterwards. If the vocabulary is what is new, ChipForAll will not close it. Its
+tests are flat, with no layers to look at. The place to start is pyuvm's own
+documentation.
 
 **pyuvm is not SystemVerilog UVM**, and if you are building a portfolio the
 difference is worth stating plainly. [pyuvm](https://github.com/pyuvm/pyuvm)
 implements UVM 1.2's class library in Python, so the structure here is the real
 thing: the same layers, the same phases, the same objection mechanism, the same
-register layer. What does not carry over is the language — SystemVerilog's
+register layer. What does not carry over is the language: SystemVerilog's
 macros, the factory, virtual interfaces, `fork`/`join`. So "built a pyuvm
-verification environment" is a claim this repository supports; "SystemVerilog UVM
-experience" is not, and an interviewer who asks a second question will find out
+verification environment" is a claim this repository supports. "SystemVerilog UVM
+experience" is not. An interviewer who asks a second question will find out
 which you meant.
 
 ## What is unusual about it
 
 **The gate-level run uses the same tests.** Not a second testbench written for the
-netlist — the same Python, the same scoreboard, the same register model:
+netlist. The same Python, the same scoreboard, the same register model:
 
 ```bash
 make gds          # produces the netlist
@@ -61,7 +62,7 @@ design can finish the flow and still miss its clock. A step here turns that into
 failed build, after printing the paths that missed.
 
 **The DUT's bugs stay in.** Verifying a design you may not edit is a different
-exercise from verifying one you wrote, and it is the one a DV engineer is paid
+exercise from verifying one you wrote. It is the one a DV engineer is paid
 for.
 
 ## Quick start
@@ -70,12 +71,12 @@ for.
 git clone https://github.com/anlit75/c4o-pyuvm.git
 cd c4o-pyuvm
 make all          # lint, Verilog sim, the pyuvm tests, synthesis — seconds
-make gds          # the physical flow: minutes, plus ~3GB of PDK the first time
+make gds          # the physical flow: minutes, plus a multi-GB PDK the first time
 make report       # area, timing, power, signoff
 make gatesim      # the same tests, on the gates
 ```
 
-Needs Docker, Make and Git — or none of them: open it in a GitHub Codespace.
+Needs Docker, Make and Git, or none of them if you open it in a GitHub Codespace.
 
 ## The design under test
 
@@ -100,7 +101,7 @@ because neither yosys nor Icarus reads the original. `make rtl` regenerates it.
 
 | Command | What it does | Output |
 |---|---|---|
-| `make all` | `lint`, `sim`, `cocotb`, `synth` — everything that runs in seconds | terminal |
+| `make all` | `lint`, `sim`, `cocotb`, `synth`: everything that runs in seconds | terminal |
 | `make lint` | Verilator lint | terminal |
 | `make sim` | the Verilog smoke test | `build/tb_apb_uart.vcd` |
 | `make cocotb` | the pyuvm tests against the RTL | `build/cocotb-results.xml` |
@@ -114,9 +115,9 @@ because neither yosys nor Icarus reads the original. `make rtl` regenerates it.
 | `make gds` | the physical layout, via LibreLane | `build/apb_uart_sv.gds` |
 | `make report` | area, timing, power and signoff from the last `make gds` | terminal |
 | `make site` | the layout, test verdicts, timing with its constraints, area and instances, power, signoff checks and both cocotb runs on one page | `build/site/index.html` |
-| `make shell` | a shell inside the c4o-core container | — |
-| `make clean` | remove `build/`, keep `runs/` | — |
-| `make distclean` | remove `build/` and `runs/` | — |
+| `make shell` | a shell inside the c4o-core container | none |
+| `make clean` | remove `build/`, keep `runs/` | none |
+| `make distclean` | remove `build/` and `runs/` | none |
 
 `make cocotb SEED=<n>` replays a random failure. The payloads are logged, so a red
 CI run gives you both the seed and the bytes.
@@ -127,9 +128,10 @@ CI run gives you both the seed and the bytes.
 
 `make cocotb WAVES=1` also writes `build/apb_uart_sv.vcd`. `make sim` writes its own `build/tb_apb_uart.vcd`.
 
-CI builds the `make site` page on every run and publishes it from `main` to
-GitHub Pages (a manual run of the workflow on `main` publishes it again), once **Settings → Pages → Source** is set to **GitHub Actions**.
-While it is not, CI still passes and says in a notice that nothing was published.
+CI builds the `make site` page on every run.
+Once **Settings → Pages → Source** is set to **GitHub Actions**, CI publishes it from `main` to GitHub Pages.
+A manual run of the workflow on `main` publishes it again.
+While that setting is unset, CI still passes and says in a notice that nothing was published.
 
 ## Layout
 
@@ -154,11 +156,11 @@ running the generators first.
 
 The [guide](docs/guide.md) covers how the testbench is built and why:
 
-*   [The environment](docs/guide.md#the-environment) — what the scoreboard checks, and what it deliberately does not model
-*   [What each test covers](docs/guide.md#what-each-test-covers) — and how to check a test can still fail
-*   [The register model](docs/guide.md#the-register-model) — what SystemRDL cannot say about a 16550, and the pyuvm settings it needs
-*   [Running on the gates](docs/guide.md#running-on-the-gates) — the one rule that makes it possible
-*   [Constraints](docs/guide.md#constraints) — why the clock is 90.9 MHz
+*   [The environment](docs/guide.md#the-environment): what the scoreboard verifies, and what it deliberately does not model
+*   [What each test covers](docs/guide.md#what-each-test-covers): how to verify a test can still fail
+*   [The register model](docs/guide.md#the-register-model): what SystemRDL cannot say about a 16550, and the pyuvm settings it needs
+*   [Running on the gates](docs/guide.md#running-on-the-gates): the one rule that makes it possible
+*   [Constraints](docs/guide.md#constraints): why the clock is 90.9 MHz
 *   [Configuration reference](docs/guide.md#configuration-reference)
 
 ---
