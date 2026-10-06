@@ -64,8 +64,9 @@ FP_SIZING: relative
 # each added nanosecond of period gives back only 0.8 ns.
 IO_DELAY_CONSTRAINT: 5
 
-# Two Verilator warnings, waived for two different reasons, named one code at a
-# time so that a third warning still stops the build.
+# Four Verilator warnings are waived here, named one code at a time so that
+# every other warning still shows. LATCH and WIDTHEXPAND are this design's, for
+# two different reasons.
 #
 # LATCH is the DUT's, and not ours to fix:
 #
@@ -81,7 +82,10 @@ IO_DELAY_CONSTRAINT: 5
 # WIDTHEXPAND is sv2v's: it renders `$unsigned(BUFFER_DEPTH - 1)` as a 32-bit
 # constant, and Verilator objects to comparing that against a 4-bit pointer. The
 # comparison is correct. The widths are the translator's.
-LINTER_DISABLE_WARNINGS: [LATCH, WIDTHEXPAND]
+#
+# DECLFILENAME and EOFNEWLINE are LibreLane's default for this key. They have to
+# be repeated here, because this key overrides rather than appends.
+LINTER_DISABLE_WARNINGS: [LATCH, WIDTHEXPAND, DECLFILENAME, EOFNEWLINE]
 
 # The blackbox stubs LibreLane generates for the PDK cells carry no timescale,
 # so TIMESCALEMOD fires once per cell. None of them is from the design. UNDRIVEN
