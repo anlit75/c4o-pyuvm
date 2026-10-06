@@ -40,11 +40,10 @@ CLOCK_PORT: CLK
 #
 #   period - 0.25 (clock uncertainty) - IO_DELAY_CONSTRAINT x period
 #
-# and the path from uart_rx_fifo_i's read pointer through the APB read mux to
-# PRDATA arrives at 9.28 ns, of which 2.83 ns are delay cells the flow inserted
-# to fix hold. Hold slack is +0.10 ns, so it cannot insert fewer. 100 MHz is
-# reachable only by claiming zero external delay on the ports. That claim says
-# whatever latches PRDATA needs no setup time of its own.
+# and the slowest path, from uart_rx_fifo_i's read pointer through the APB read
+# mux to PRDATA, arrives at 7.63 ns in the max_ss corner. At an 11 ns period
+# setup slack is +2.57 ns. At 10 ns setup still holds (+1.61 ns), but hold
+# fails in max_ss by 0.01 ns and the flow stops. Measured with LibreLane 3.0.14.
 CLOCK_PERIOD: 11.0
 
 # ============ keep these unless you know what you are doing ============
@@ -54,6 +53,25 @@ STD_CELL_LIBRARY: sky130_fd_sc_hd
 
 FP_CORE_UTIL: 40
 FP_SIZING: relative
+
+# The physical flow may not use the weakest buffers. When OpenROAD buffers a
+# port or splits a net with too many loads, it takes the weakest buffer it
+# finds and does not resize it. In sky130_fd_sc_hd that is a delay cell
+# (clkdlybuf4s25_1 or dlygate4sd*), because the PDK gives those the same
+# footprint as buf_1, or buf_1 itself. The repair step checks the slew against
+# the wire load it estimates after placement. After routing the wire load is
+# about twice that, so in the ss corners the slew goes past the 0.75 ns limit.
+# Without these cells the weakest buffer is buf_2.
+#
+# Measured, not guessed, with LibreLane 3.0.14: max slew violations went from
+# 297 to 9, and setup slack from +0.92 to +2.57 ns. Hold repair then uses plain
+# buffers, so it adds about twice as many and hold slack drops to +0.04 ns.
+# Remove this key when OpenROAD closes issue 10622:
+# https://github.com/The-OpenROAD-Project/OpenROAD/issues/10622
+EXTRA_EXCLUDED_CELLS:
+  - sky130_fd_sc_hd__clkdlybuf4s*
+  - sky130_fd_sc_hd__dlygate4sd*
+  - sky130_fd_sc_hd__buf_1
 
 # The sky130 default is 20: a fifth of every clock period reserved as external
 # delay on the ports. That is right for a design whose pins drive a package and

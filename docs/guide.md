@@ -199,12 +199,9 @@ period − clock uncertainty − IO_DELAY_CONSTRAINT × period
 
 At 20% each added nanosecond returns only 0.8 ns. At 5% it returns 0.95 ns.
 
-**`CLOCK_PERIOD: 11.0` is 90.9 MHz, not 100.** With an honest port budget the design
-does not meet 100 MHz: the path from the RX FIFO's read pointer through the APB read
-mux to `PRDATA` does not fit. Roughly a third of that path is delay cells the flow
-inserted to fix hold. Hold slack is too small to insert fewer, so it is not a
-constraint away. 100 MHz is reachable only by claiming zero external delay on the
-ports. That asserts that whatever latches `PRDATA` needs no setup time of its own.
+**`CLOCK_PERIOD: 11.0` is 90.9 MHz, not 100.** At 100 MHz the setup paths still fit,
+but hold fails in the `max_ss` corner and the flow stops. `config.yaml` has the
+measured slack for both periods.
 
 `ERROR_ON_SYNTH_CHECKS` is off, because the DUT's register file has eight dead
 self-looping bits that the pre-synthesis check reports as logic loops. They are
