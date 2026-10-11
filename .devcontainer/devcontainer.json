@@ -1,6 +1,6 @@
 {
     "name": "ChipForAll",
-    "image": "ghcr.io/anlit75/c4o-core:2.25",
+    "image": "ghcr.io/anlit75/c4o-core:2.27",
     // Do not change this to a non-root user without testing a Codespace.
     // "ubuntu" (the user ubuntu:24.04 ships at uid 1000) looked like the right
     // answer -- it keeps files created here owned by the host user on Linux --
@@ -39,7 +39,7 @@
                 "mshr-h.veriloghdl",
                 "wavetrace.wavetrace",
                 // clarkyu.vscode-yosys-viewer used to be here, to open the
-                // Yosys netlist `make synth` writes. It has been pulled from
+                // Yosys netlist `make rtl` writes. It has been pulled from
                 // the marketplace, and a listed extension that no longer
                 // exists does not fail the build -- it just never installs.
                 // Nothing here can catch that either: extensions are the VS

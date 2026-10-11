@@ -79,7 +79,7 @@ jobs:
             docker info > /dev/null
             docker version --format '{{.Server.Version}}'
             echo "--- the in-container delegation path ---"
-            make lint
+            make rtl
 
   # The steps every repository made from the ChipForAll template shares (the
   # image and PDK setup, the fast checks, the flow, the report, the uploads)
@@ -104,9 +104,10 @@ jobs:
       - name: Setup
         uses: anlit75/c4o-core/actions/setup@v2
 
-      # Lint, the Verilog testbench, the pyuvm tests against the RTL (their
-      # output is kept in build/cocotb-rtl.log, which the Report step compares
-      # the gate-level run with), synthesis and the schematic.
+      # The config check, compile, lint and synthesis, the Verilog testbench and
+      # the pyuvm tests against the RTL (their output is kept in
+      # build/cocotb-rtl.log, which the Report step compares the gate-level run
+      # with), and the schematic.
       - name: Fast checks
         uses: anlit75/c4o-core/actions/checks@v2
 
@@ -132,17 +133,17 @@ jobs:
       # rtl/apb_uart_sv.v is sv2v's output for rtl/vendor/apb_uart_sv/*.sv plus a
       # header of ours, committed so a fresh clone can run the flow. Same
       # drift as above: change the SystemVerilog or the header in the Makefile,
-      # forget `make rtl`, and the flow reads a file that is out of date.
+      # forget `make sv2v`, and the flow reads a file that is out of date.
       - name: The Verilog matches the SystemVerilog it came from
         run: |
           cp rtl/apb_uart_sv.v /tmp/committed_rtl.v
-          make rtl
+          make sv2v
           if ! diff -u /tmp/committed_rtl.v rtl/apb_uart_sv.v; then
-            echo "rtl/apb_uart_sv.v is not what make rtl generates."
-            echo "Run 'make rtl' and commit the result."
+            echo "rtl/apb_uart_sv.v is not what make sv2v generates."
+            echo "Run 'make sv2v' and commit the result."
             exit 1
           fi
-          echo "rtl/apb_uart_sv.v is byte-identical to what make rtl produces."
+          echo "rtl/apb_uart_sv.v is byte-identical to what make sv2v produces."
 
       - name: Physical design
         uses: anlit75/c4o-core/actions/gds@v2

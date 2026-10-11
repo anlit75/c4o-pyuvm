@@ -25,4 +25,4 @@ you cannot, and the second is the one this repository is about. Its bugs stay
 in: see the LATCH waiver in `config.yaml`, which is one of them.
 
 The Verilog the tools here actually read is `rtl/apb_uart_sv.v`, generated from
-these files by `make rtl`. Nothing regenerates them.
+these files by `make sv2v`. Nothing regenerates them.

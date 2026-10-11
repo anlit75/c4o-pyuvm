@@ -9,7 +9,7 @@
 
 DESIGN_NAME: apb_uart_sv
 
-# The generated Verilog, not the SystemVerilog it came from. `make rtl` writes
+# The generated Verilog, not the SystemVerilog it came from. `make sv2v` writes
 # it. rtl/vendor/apb_uart_sv/README.md says why it is committed. A glob does not
 # work here: LibreLane checks each entry as a literal path.
 VERILOG_FILES:
