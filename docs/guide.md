@@ -149,7 +149,7 @@ on every pull request for that reason, and it costs a few seconds.
 the PDK cell models alongside the netlist and those carry `1ns/1ps`. RTL on its own
 carries none, so Icarus runs it at a precision of one second. cocotb's `step` unit
 is that precision, which means the same clock period means different things in the
-two runs. `make rtl` writes `` `timescale 1ns / 1ps `` into the generated Verilog so
+two runs. `make sv2v` writes `` `timescale 1ns / 1ps `` into the generated Verilog so
 they agree, and the tests ask for nanoseconds.
 
 For the same reason, do not reach for `COCOTB_RESOLVE_X` when a gate-level read
@@ -176,11 +176,11 @@ make cocotb SEED=<n> TEST=test_uart.random_bytes    # replay one failed run
 make coverage     # the same tests again, on Verilator, with counters
 ```
 
-`make coverage` counts three kinds of points: blocks that ran, branches taken (each side of an `if` or a `case`) and signal bits that toggled. The results page shows each kind with the points hit and the total, and CI measures it on every run. `make all` does not. With `"//REGRESSION"` set, `make coverage` merges its counters over every run of the list.
+`make coverage` counts three kinds of points: blocks that ran, branches taken (each side of an `if` or a `case`) and signal bits that toggled. The results page shows each kind with the points hit and the total, and CI measures it on every run. `make sim` does not, and `make regress` ends with it. With `"//REGRESSION"` set, `make coverage` merges its counters over every run of the list.
 
 **The numbers are for `rtl/apb_uart_sv.v`**, the file `sv2v` generates, and not for the SystemVerilog under `rtl/vendor/`. A block here is a block of the translation.
 
-**Pass and fail stay with `make cocotb`.** That run is on Icarus. Verilator is 2-state, so a signal that is X before reset reads 0 there. So a test can pass on one and fail on the other. A failing Verilator run does not fail `make coverage`. A design that Verilator cannot build does. `make coverage SEED=<n>` sets the seed, and the page says which one the run used. [All the details](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#code-coverage-coverage).
+**Pass and fail stay with `make sim` and `make regress`.** Those run on Icarus. Verilator is 2-state, so a signal that is X before reset reads 0 there. So a test can pass on one and fail on the other. A failing Verilator run does not fail `make coverage`. A design that Verilator cannot build does. `make coverage SEED=<n>` sets the seed, and the page says which one the run used. [All the details](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#code-coverage-coverage).
 
 ## Constraints
 
@@ -242,7 +242,7 @@ make schematic
 Draws `build/schematic.svg`. It shows the design as flops, adders and muxes, carrying the
 names the RTL gave them. Open it in a browser or click it in VS Code.
 
-It is not a picture of the netlist. `make synth` runs a full synthesis and leaves
+It is not a picture of the netlist. `make rtl` runs a full synthesis and leaves
 hundreds of technology cells, from which nobody has ever learned anything about
 their own design. `make schematic` stops earlier, where the circuit still looks like
 the code it came from. Under a second, so it costs nothing to run after a change.
@@ -280,7 +280,7 @@ what keeps one file valid for both tools.
 | `DESIGN_NAME` | the top module's name. Everything else reads it from here |
 | `VERILOG_FILES` | synthesisable sources. Each entry is checked as a literal path. `**` is not expanded |
 | `"//TEST_FILES"` | Verilog testbenches for `make sim`. Globs work |
-| `"//COCOTB_TESTS"` | Python testbenches for `make cocotb` and `make gatesim`. Only files defining `@cocotb.test()`. They import the rest of `tb/` |
+| `"//COCOTB_TESTS"` | Python testbenches for `make sim`, `make cocotb` and `make gatesim`. Only files defining `@cocotb.test()`. They import the rest of `tb/` |
 | `"//REGRESSION"` | the YAML test list for `make regress`: `test`, and `seeds` for each |
 | `"//DESCRIPTION"` | one line under the results page's title and in its link preview: what the design is |
 | `CLOCK_PORT` / `CLOCK_PERIOD` | the clock to constrain, and its period in ns |

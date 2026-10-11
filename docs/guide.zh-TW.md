@@ -136,7 +136,7 @@ CI 每個 pull request 都跑它就是為了這個，而且只要幾秒。
 **設計帶著 `` `timescale ``，而且必須帶。** gate-level 會把 PDK 的 cell model 跟
 netlist 一起編譯，而那些 model 帶著 `1ns/1ps`。RTL 自己不帶，所以 Icarus 會用「一秒」
 當精度跑它。cocotb 的 `step` 單位就是那個精度，也就是同一個時脈週期在兩次執行裡意思不
-一樣。`make rtl` 會把 `` `timescale 1ns / 1ps `` 寫進生成的 Verilog 讓兩邊對齊，測試則
+一樣。`make sv2v` 會把 `` `timescale 1ns / 1ps `` 寫進生成的 Verilog 讓兩邊對齊，測試則
 一律用奈秒。
 
 同樣的道理，gate-level 讀到 X 時不要去碰 `COCOTB_RESOLVE_X`。這些測試讀的暫存器都是測
@@ -163,11 +163,11 @@ make cocotb SEED=<n> TEST=test_uart.random_bytes    # 重播一次失敗的執�
 make coverage     # 同一批測試再跑一次，用 Verilator 加計數器
 ```
 
-`make coverage` 計算三種點：執行過的 block、走過的 branch（`if` 或 `case` 的每一邊）和變過值的訊號位元。結果網頁依種類列出命中的點數和總數，CI 每次都會量。`make all` 不會。設了 `"//REGRESSION"` 時，`make coverage` 把計數器合併在清單的每一次執行上。
+`make coverage` 計算三種點：執行過的 block、走過的 branch（`if` 或 `case` 的每一邊）和變過值的訊號位元。結果網頁依種類列出命中的點數和總數，CI 每次都會量。`make sim` 不會，`make regress` 最後會跑。設了 `"//REGRESSION"` 時，`make coverage` 把計數器合併在清單的每一次執行上。
 
 **數字對應的是 `rtl/apb_uart_sv.v`**，也就是 `sv2v` 生成的檔案，不是 `rtl/vendor/` 底下的 SystemVerilog。這裡的 block 是翻譯後的 block。
 
-**通過或失敗仍由 `make cocotb` 決定。** 那次執行在 Icarus 上。Verilator 是 2 值模擬，所以 reset 之前是 X 的訊號在那裡讀成 0。所以同一個測試可能在一個通過、在另一個失敗。Verilator 那次執行失敗，不會讓 `make coverage` 失敗。Verilator 建不起來的設計才會。`make coverage SEED=<n>` 設定 seed，網頁會寫出這次執行用的 seed。[完整細節](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#code-coverage-coverage)。
+**通過或失敗仍由 `make sim` 和 `make regress` 決定。** 它們在 Icarus 上跑。Verilator 是 2 值模擬，所以 reset 之前是 X 的訊號在那裡讀成 0。所以同一個測試可能在一個通過、在另一個失敗。Verilator 那次執行失敗，不會讓 `make coverage` 失敗。Verilator 建不起來的設計才會。`make coverage SEED=<n>` 設定 seed，網頁會寫出這次執行用的 seed。[完整細節](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#code-coverage-coverage)。
 
 ## 時序與 constraint
 
@@ -221,7 +221,7 @@ make schematic
 畫出 `build/schematic.svg`。設計呈現成 flop、加法器、mux，帶著 RTL 給它們的名字。用瀏
 覽器開，或在 VS Code 裡點開。
 
-它不是 netlist 的圖。`make synth` 跑的是完整合成，留下幾百顆製程 cell，從來沒有人從那
+它不是 netlist 的圖。`make rtl` 跑的是完整合成，留下幾百顆製程 cell，從來沒有人從那
 裡面看懂過自己的設計。`make schematic` 停得更早，停在電路還看得出原始程式碼的地方。一秒
 內跑完，所以改完東西順手跑一次不花什麼成本。
 
@@ -254,7 +254,7 @@ LibreLane 的 key 都帶 `//` 前綴，它會忽略。這就是讓同一個檔�
 | `DESIGN_NAME` | 頂層模組名稱。其他所有東西都從這裡讀 |
 | `VERILOG_FILES` | 可合成的原始碼。每一項都會被當成字面路徑驗證。`**` 不會展開 |
 | `"//TEST_FILES"` | `make sim` 用的 Verilog testbench。可以用 glob |
-| `"//COCOTB_TESTS"` | `make cocotb` 和 `make gatesim` 用的 Python testbench。只放有 `@cocotb.test()` 的檔案。`tb/` 其餘檔案由它們 import |
+| `"//COCOTB_TESTS"` | `make sim`、`make cocotb` 和 `make gatesim` 用的 Python testbench。只放有 `@cocotb.test()` 的檔案。`tb/` 其餘檔案由它們 import |
 | `"//REGRESSION"` | `make regress` 用的 YAML 測試清單：每項有 `test` 和 `seeds` |
 | `"//DESCRIPTION"` | 結果網頁標題下方、以及分享連結預覽裡的一句話：這個設計是什麼 |
 | `CLOCK_PORT` / `CLOCK_PERIOD` | 要約束的時脈，以及它的週期（ns） |

@@ -70,7 +70,7 @@ for.
 ```bash
 git clone https://github.com/anlit75/c4o-pyuvm.git
 cd c4o-pyuvm
-make all          # lint, Verilog sim, the pyuvm tests, synthesis — seconds
+make sim          # compile, lint, synthesis, the Verilog sim, the pyuvm tests — seconds
 make gds          # the physical flow: minutes, plus a multi-GB PDK the first time
 make report       # area, timing, power, signoff
 make gatesim      # the same tests, on the gates
@@ -95,22 +95,21 @@ Its upstream is archived. Three findings are documented rather than patched:
 | eight dead self-looping bits in the register file, which stop the physical flow | `config.yaml`, at `ERROR_ON_SYNTH_CHECKS` |
 
 `rtl/apb_uart_sv.v` is Verilog-2005 translated from that SystemVerilog by `sv2v`,
-because neither yosys nor Icarus reads the original. `make rtl` regenerates it.
+because neither yosys nor Icarus reads the original. `make sv2v` regenerates it.
 
 ## Commands
 
 | Command | What it does | Output |
 |---|---|---|
-| `make all` | `lint`, `sim`, `cocotb`, `synth`: everything that runs in seconds | terminal |
-| `make lint` | Verilator lint | terminal |
-| `make sim` | the Verilog smoke test | `build/tb_apb_uart.vcd` |
-| `make cocotb` | the pyuvm tests against the RTL | `build/cocotb-results.xml` |
-| `make regress` | the tests of `tb/regression.yaml`, each over its seeds | `build/regress/` |
-| `make coverage` | the RTL that the pyuvm tests run, counted on Verilator | `build/coverage/` |
+| `make` | checks `config.yaml` and the files it names; runs no tool | terminal |
+| `make rtl` | Icarus compile, Verilator lint and Yosys synthesis | `build/synthesis.json` |
+| `make sim` | `make rtl`, then the Verilog smoke test and the pyuvm tests against the RTL | `build/tb_apb_uart.vcd`, `build/cocotb-results.xml` |
+| `make cocotb` | the pyuvm tests alone, to replay one seed or one test | `build/cocotb-results.xml` |
+| `make regress` | the tests of `tb/regression.yaml`, each over its seeds, then coverage of the same runs | `build/regress/`, `build/coverage/` |
+| `make coverage` | the coverage run alone: the RTL that the pyuvm tests run, counted on Verilator | `build/coverage/` |
 | `make gatesim` | the same tests against the netlist (after `make gds`) | `build/cocotb-gl-results.xml` |
-| `make rtl` | regenerate `rtl/apb_uart_sv.v` from `rtl/vendor/` | `rtl/apb_uart_sv.v` |
+| `make sv2v` | regenerate `rtl/apb_uart_sv.v` from `rtl/vendor/` | `rtl/apb_uart_sv.v` |
 | `make ral` | regenerate `tb/uart_ral.py` from `regs/apb_uart.rdl` | `tb/uart_ral.py` |
-| `make synth` | Yosys synthesis | `build/synthesis.json` |
 | `make schematic` | the circuit as an SVG | `build/schematic.svg` |
 | `make gds` | the physical layout, via LibreLane | `build/apb_uart_sv.gds` |
 | `make report` | area, timing, power and signoff from the last `make gds` | terminal |
@@ -119,14 +118,16 @@ because neither yosys nor Icarus reads the original. `make rtl` regenerates it.
 | `make clean` | remove `build/`, keep `runs/` | none |
 | `make distclean` | remove `build/` and `runs/` | none |
 
+`make sv2v` was `make rtl` until c4o-core 2.26 gave that name to the compile, lint and synthesis. The older c4o-core names still work: `make all` runs `make sim`, and `make lint` and `make synth` run `make rtl`.
+
 `make cocotb SEED=<n>` replays a random failure. The payloads are logged, so a red
 CI run gives you both the seed and the bytes.
 
-`make regress` runs the list in `tb/regression.yaml`: one compile, then one simulation for each test and seed. A failed run prints its replay command, for example `make cocotb SEED=<n> TEST=test_uart.random_bytes`. `make coverage` merges its counters over the same runs. [More on `make regress`](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#many-seeds-regress).
+`make regress` runs the list in `tb/regression.yaml`: one compile, then one simulation for each test and seed. A failed run prints its replay command, for example `make cocotb SEED=<n> TEST=test_uart.random_bytes`. `make regress` then merges coverage over the same runs. [More on `make regress`](https://github.com/anlit75/c4o-core/blob/main/docs/commands.md#many-seeds-regress).
 
-`make coverage` counts block, branch and toggle points. The numbers belong to `rtl/apb_uart_sv.v`, the file that `sv2v` generates, and not to `rtl/vendor/`. Pass and fail stay with `make cocotb`. The [guide](docs/guide.md#code-coverage) has more.
+`make coverage` counts block, branch and toggle points. The numbers belong to `rtl/apb_uart_sv.v`, the file that `sv2v` generates, and not to `rtl/vendor/`. Pass and fail stay with `make sim` and `make regress`. The [guide](docs/guide.md#code-coverage) has more.
 
-`make cocotb WAVES=1` also writes `build/apb_uart_sv.vcd`. `make sim` writes its own `build/tb_apb_uart.vcd`.
+`make sim` writes `build/tb_apb_uart.vcd` from the Verilog smoke test. `make sim WAVES=1` also writes `build/apb_uart_sv.vcd` from the pyuvm tests.
 
 CI builds the `make site` page on every run.
 Once **Settings → Pages → Source** is set to **GitHub Actions**, CI publishes it from `main` to GitHub Pages.
@@ -138,7 +139,7 @@ While that setting is unset, CI still passes and says in a notice that nothing w
 ```text
 config.yaml           design name, clock, constraints — each with its reason
 regs/apb_uart.rdl     the register map, and what SystemRDL cannot express
-rtl/apb_uart_sv.v     generated by make rtl — do not edit
+rtl/apb_uart_sv.v     generated by make sv2v — do not edit
 rtl/vendor/           somebody else's SystemVerilog, unmodified
 tb/apb_agent.py       APB3 driver, monitor, agent, register adapter
 tb/uart_env.py        environment, scoreboard, test base class

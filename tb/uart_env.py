@@ -25,7 +25,7 @@ from pyuvm import (ConfigDB, set_sv_uvm_style_reporting_enabled,
 from apb_agent import DLAB, FCR, LCR, RBR, THR, ApbAgent, ApbRegAdapter
 from uart_ral import apb_uart
 
-# Nanoseconds, and `make rtl` puts a `timescale in the generated Verilog so that
+# Nanoseconds, and `make sv2v` puts a `timescale in the generated Verilog so that
 # they mean the same thing on the RTL and on the gates. cocotb's "step" unit does
 # not: a gate-level run compiles the PDK cell models alongside the netlist, those
 # carry 1ns/1ps, and a step there is a picosecond -- while the RTL on its own has
