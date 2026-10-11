@@ -245,6 +245,24 @@ VS Code 裡選 *Reopen in Container*，你會拿到 CI 用的同一個 image，V
 
 `make shell` 可以從任何終端機進到同一個 image。
 
+## 專案結構
+
+```text
+config.yaml           設計名稱、時脈、constraint，連理由一起
+regs/apb_uart.rdl     暫存器圖，以及 SystemRDL 說不出口的事
+rtl/apb_uart_sv.v     由 make sv2v 生成，不要手改
+rtl/vendor/           別人的 SystemVerilog，原封不動
+tb/apb_agent.py       APB3 driver、monitor、agent、暫存器 adapter
+tb/uart_env.py        環境、scoreboard、測試基底類別
+tb/uart_ral.py        由 make ral 生成，不要手改
+tb/test_uart.py       資料路徑，走 DUT 自己的 loopback
+tb/test_ral.py        暫存器，透過模型
+tb/tb_apb_uart.v      Verilog 煙霧測試
+docs/guide.zh-TW.md   它怎麼運作
+```
+
+`make sim` 從 Verilog 煙霧測試寫出 `build/tb_apb_uart.vcd`。`make sim WAVES=1` 另外從 pyuvm 測試寫出 `build/apb_uart_sv.vcd`。
+
 ## 設定檔參考
 
 `config.yaml` 是 [LibreLane](https://github.com/librelane/librelane) 的設定檔。不屬於
