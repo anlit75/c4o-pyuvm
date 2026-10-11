@@ -225,7 +225,9 @@ one that removes it.
 
 The resumed steps are added after the old ones, so the run directory holds two of
 each until the next full run. `make gds` without `--from` is a full run, and it
-starts from an empty run directory.
+starts from an empty run directory. When the RTL, `config.yaml` and the files it
+points at are the same as in the last full run, `make gds` skips LibreLane and
+prints the report. `make gds FORCE=1` runs it anyway.
 
 **`CLOCK_PERIOD` is not one of them**, which matters here because it is the key
 this design's timing turns on. The clock is an input to synthesis, which sizes

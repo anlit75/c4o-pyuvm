@@ -107,18 +107,16 @@ because neither yosys nor Icarus reads the original. `make sv2v` regenerates it.
 | `make cocotb` | the pyuvm tests alone, to replay one seed or one test | `build/cocotb-results.xml` |
 | `make regress` | the tests of `tb/regression.yaml`, each over its seeds, then coverage of the same runs | `build/regress/`, `build/coverage/` |
 | `make coverage` | the coverage run alone: the RTL that the pyuvm tests run, counted on Verilator | `build/coverage/` |
-| `make gatesim` | the same tests against the netlist (after `make gds`) | `build/cocotb-gl-results.xml` |
+| `make gatesim` | the same tests against the netlist (after `make gds`; stops if the RTL changed since) | `build/cocotb-gl-results.xml` |
 | `make sv2v` | regenerate `rtl/apb_uart_sv.v` from `rtl/vendor/` | `rtl/apb_uart_sv.v` |
 | `make ral` | regenerate `tb/uart_ral.py` from `regs/apb_uart.rdl` | `tb/uart_ral.py` |
 | `make schematic` | the circuit as an SVG | `build/schematic.svg` |
-| `make gds` | the physical layout, via LibreLane | `build/apb_uart_sv.gds` |
-| `make report` | area, timing, power and signoff from the last `make gds` | terminal |
+| `make gds` | the physical layout, via LibreLane; skipped when nothing it reads changed, `FORCE=1` runs it anyway | `build/apb_uart_sv.gds` |
+| `make report` | area, timing, power and signoff from the last `make gds` (stops if the RTL changed since) | terminal |
 | `make site` | the layout, test verdicts, timing with its constraints, area and instances, power, signoff checks and both cocotb runs on one page | `build/site/index.html` |
 | `make shell` | a shell inside the c4o-core container | none |
 | `make clean` | remove `build/`, keep `runs/` | none |
-| `make distclean` | remove `build/` and `runs/` | none |
-
-`make sv2v` was `make rtl` until c4o-core 2.26 gave that name to the compile, lint and synthesis. The older c4o-core names still work: `make all` runs `make sim`, and `make lint` and `make synth` run `make rtl`.
+| `make distclean` | remove `build/`, `runs/` and `.c4o/` | none |
 
 `make cocotb SEED=<n>` replays a random failure. The payloads are logged, so a red
 CI run gives you both the seed and the bytes.

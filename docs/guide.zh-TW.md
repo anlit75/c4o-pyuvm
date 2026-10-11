@@ -205,7 +205,8 @@ LibreLane 會從已經做完的設計開始，流程會失敗。這個指令會�
 也是 `make clean` 不動那個目錄、而 `make distclean` 才會刪掉它的原因。
 
 恢復後重跑的步驟會接在舊步驟後面，所以在下一次完整執行之前，執行目錄裡每個步驟都有兩份。
-不加 `--from` 的 `make gds` 是完整執行，它從空的執行目錄開始。
+不加 `--from` 的 `make gds` 是完整執行，它從空的執行目錄開始。RTL、`config.yaml` 和它指到的檔案
+都和上一次完整執行相同時，`make gds` 會跳過 LibreLane，直接印出報告。`make gds FORCE=1` 照跑。
 
 **`CLOCK_PERIOD` 不在裡面**，而這件事在這個 repo 特別重要，因為它就是這個設計時序的關
 鍵。時脈是合成的輸入，合成會依它挑元件尺寸、插 buffer。所以從 floorplan 恢復的話，你量

@@ -95,18 +95,16 @@ make gatesim      # 同一份測試，跑在 gate 上
 | `make cocotb` | 只跑 pyuvm 測試，用來重播一個 seed 或一個測試 | `build/cocotb-results.xml` |
 | `make regress` | `tb/regression.yaml` 裡的測試，每個跑它的 seed，再量同樣那些執行的覆蓋率 | `build/regress/`、`build/coverage/` |
 | `make coverage` | 只跑覆蓋率：pyuvm 測試跑過的 RTL，用 Verilator 計數 | `build/coverage/` |
-| `make gatesim` | 同一份測試對 netlist（要先 `make gds`） | `build/cocotb-gl-results.xml` |
+| `make gatesim` | 同一份測試對 netlist（要先 `make gds`；之後 RTL 改過就會停下） | `build/cocotb-gl-results.xml` |
 | `make sv2v` | 從 `rtl/vendor/` 重新生成 `rtl/apb_uart_sv.v` | `rtl/apb_uart_sv.v` |
 | `make ral` | 從 `regs/apb_uart.rdl` 重新生成 `tb/uart_ral.py` | `tb/uart_ral.py` |
 | `make schematic` | 把電路畫成 SVG | `build/schematic.svg` |
-| `make gds` | 用 LibreLane 做物理 layout | `build/apb_uart_sv.gds` |
-| `make report` | 上一次 `make gds` 的面積、時序、功耗、signoff | 終端機 |
+| `make gds` | 用 LibreLane 做物理 layout；它讀的東西都沒變就跳過，`FORCE=1` 照跑 | `build/apb_uart_sv.gds` |
+| `make report` | 上一次 `make gds` 的面積、時序、功耗、signoff（之後 RTL 改過就會停下） | 終端機 |
 | `make site` | 把 layout、測試結果、含限制條件的時序、面積與 instance、功耗、signoff 檢查和兩次 cocotb 結果放進同一個網頁 | `build/site/index.html` |
 | `make shell` | 進入 c4o-core 容器 | 無 |
 | `make clean` | 刪掉 `build/`，保留 `runs/` | 無 |
-| `make distclean` | 刪掉 `build/` 和 `runs/` | 無 |
-
-`make sv2v` 原本叫 `make rtl`，c4o-core 2.26 把這個名字給了編譯、lint 和合成。c4o-core 的舊名字還能用：`make all` 跑 `make sim`，`make lint` 和 `make synth` 跑 `make rtl`。
+| `make distclean` | 刪掉 `build/`、`runs/` 和 `.c4o/` | 無 |
 
 `make cocotb SEED=<n>` 重播一次隨機失敗。payload 會記進 log，所以一次紅掉的 CI 會同時
 告訴你 seed 和那些位元組。
