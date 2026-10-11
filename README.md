@@ -2,7 +2,7 @@
 
 # c4o-pyuvm
 
-**A layered pyuvm testbench for a UART somebody else wrote, from RTL to GDS.**
+**A Layered pyuvm Testbench for a UART Somebody Else Wrote, from RTL to GDS.**
 
 The same tests run on the RTL and on the gates. One SystemRDL file generates the register model.
 
@@ -12,17 +12,6 @@ The same tests run on the RTL and on the gates. One SystemRDL file generates the
 [![License](https://img.shields.io/github/license/anlit75/c4o-pyuvm)](LICENSE)
 
 </div>
-
-```mermaid
-flowchart TB
-    T[Test] ==> E[Environment]
-    E ==> A[APB Agent: driver, monitor, sequencer]
-    E ==> S[Scoreboard]
-    E ==> R[Register Model]
-    R ==>|register adapter| A
-    A ==>|top-level ports only| D[UART: RTL or gates]
-    A ==>|monitored transactions| S
-```
 
 ## What Makes It Different
 

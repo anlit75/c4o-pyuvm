@@ -13,17 +13,6 @@
 
 </div>
 
-```mermaid
-flowchart TB
-    T[Test] ==> E[Environment]
-    E ==> A[APB Agent: driver, monitor, sequencer]
-    E ==> S[Scoreboard]
-    E ==> R[Register Model]
-    R ==>|register adapter| A
-    A ==>|只碰 top-level port| D[UART: RTL 或 gate]
-    A ==>|monitor 看到的交易| S
-```
-
 ## 它跟別人不一樣的地方
 
 **在不屬於你的 UART 上，搭一個分層的環境。** 一個 APB agent、一個 scoreboard 和一個 UVM 暫存器模型，驗一顆 16550 風格的 APB UART。DUT 原封不動地 vendored 進來。
