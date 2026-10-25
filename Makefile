@@ -3,18 +3,18 @@
 
 # Image Configuration
 #
-# Pinned to the minor, not the patch. c4o-core publishes 2.27.0, 2.27, 2 and
-# latest for every release; 2.27 means a fix reaches you without anybody editing
-# this line -- for as long as 2.27 is c4o-core's newest minor. Only the newest
-# minor gets fixes, so once 2.28 is out this line has to move to keep getting
-# them. A new behaviour never arrives unannounced. Pin 2.27.0 instead if you
+# Pinned to the minor, not the patch. c4o-core publishes 2.28.0, 2.28, 2 and
+# latest for every release; 2.28 means a fix reaches you without anybody editing
+# this line -- for as long as 2.28 is c4o-core's newest minor. Only the newest
+# minor gets fixes, so once 2.29 is out this line has to move to keep getting
+# them. A new behaviour never arrives unannounced. Pin 2.28.0 instead if you
 # want a byte-identical image forever, and remember that you then also own
 # noticing its fixes.
 #
 # Two files carry this version -- here and .devcontainer/devcontainer.json. CI
 # refuses to continue when they disagree, so change both together. The workflow
 # reads the image name from this line.
-C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.27
+C4O_IMAGE := ghcr.io/anlit75/c4o-core:2.28
 LIBRELANE_IMAGE := ghcr.io/librelane/librelane:3.0.14
 
 # --- From here down this file is c4o-core's stub.mk. Do not edit it. ---
