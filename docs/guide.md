@@ -266,8 +266,7 @@ Two things to know:
     normal user instead breaks Codespaces.
 *   **Watch the disk in a Codespace.** The inner daemon has its own image store, so
     the LibreLane image is pulled again rather than shared, and the PDK is another
-    several GB. Run `du -sh pdks/` to see its size. On the smallest machine type
-    that is most of the disk.
+    1 GB. Run `du -sh pdks/` to see its size.
 
 `make shell` drops you into the same image from any terminal.
 
