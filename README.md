@@ -35,7 +35,7 @@ You need Docker, Make and Git. A GitHub Codespace needs none of them.
 git clone https://github.com/anlit75/c4o-pyuvm.git
 cd c4o-pyuvm
 make sim          # compile, lint, synthesis, Verilog sim, pyuvm tests: seconds
-make gds          # physical flow: minutes, plus a multi-GB PDK download on a first run
+make gds          # physical flow: minutes, plus a PDK download of about 170 MB on a first run
 make gatesim      # the same tests, on the gates
 ```
 

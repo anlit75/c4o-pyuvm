@@ -35,7 +35,7 @@
 git clone https://github.com/anlit75/c4o-pyuvm.git
 cd c4o-pyuvm
 make sim          # 編譯、lint、合成、Verilog 模擬、pyuvm 測試：幾秒鐘
-make gds          # 物理流程：幾分鐘，第一次還要下載好幾 GB 的 PDK
+make gds          # 物理流程：幾分鐘，第一次還要下載約 170 MB 的 PDK
 make gatesim      # 同一份測試，跑在 gate 上
 ```
 
